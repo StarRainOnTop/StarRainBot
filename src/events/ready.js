@@ -1,5 +1,5 @@
 import { Events } from 'discord.js';
-import config from '../../config.js';
+import config from '../config/bot.js';
 import { logger, startupLog } from '../utils/logger.js';
 import { registerCommands } from '../handlers/commandHandler.js';
 import { 
@@ -16,7 +16,7 @@ export default {
 
   async execute(client) {
     try {
-      // ✅ 修正這裡：直接讀取 config.presence（對應 config.js 的結構）
+      // ✅ 讀取 config.presence
       client.user.setPresence(config.presence);
 
       startupLog(`Ready! Logged in as ${client.user.tag}`);
