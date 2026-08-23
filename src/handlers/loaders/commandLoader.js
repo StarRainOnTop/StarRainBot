@@ -233,43 +233,46 @@ function prepareCommandsForRegistration(commands) {
     return truncated;
 }
 
-// 👈 修改這裡：從 registerGlobalCommands 改為 registerGuildCommands 並指定 guildId 路徑
-async function registerGuildCommands(client, clientId, guildId, commands, totalSubcommands) {
+// 💡 修正：改回支援可選伺服器（有 guildId 註冊到指定伺服器，沒有則走全域）
+async function registerCommandsTarget(client, clientId, guildId, commands, totalSubcommands) {
     if (!clientId) {
         throw new Error('CLIENT_ID is required for slash command registration');
-    }
-    if (!guildId) {
-        throw new Error('GUILD_ID is required for single-server command registration');
     }
 
     if (!client.rest) {
         throw new Error('Discord REST client is not available for slash command registration');
     }
 
-    logger.info(`Preparing to register ${totalSubcommands + commands.length} guild commands for server: ${guildId}`);
-    logger.info('Validating commands before registration...');
     validateCommands(commands);
-    logger.info('Command validation passed');
-
     const commandsToRegister = prepareCommandsForRegistration(commands);
 
-    if (botConfig.commands?.deleteCommands) {
-        logger.info('Clearing existing guild commands before registration...');
-        await client.rest.put(`/applications/${clientId}/guilds/${guildId}/commands`, { body: [] });
+    if (guildId) {
+        logger.info(`Preparing to register ${totalSubcommands + commands.length} guild commands for server: ${guildId}`);
+        if (botConfig.commands?.deleteCommands) {
+            logger.info('Clearing existing guild commands before registration...');
+            await client.rest.put(`/applications/${clientId}/guilds/${guildId}/commands`, { body: [] });
+        }
+        logger.info(`Registering ${commandsToRegister.length} guild commands (Immediate update)...`);
+        await client.rest.put(`/applications/${clientId}/guilds/${guildId}/commands`, { body: commandsToRegister });
+        logger.info(`Successfully registered ${commandsToRegister.length} guild commands for server ${guildId}`);
+    } else {
+        logger.info(`Preparing to register ${totalSubcommands + commands.length} global commands...`);
+        if (botConfig.commands?.deleteCommands) {
+            logger.info('Clearing existing global commands before registration...');
+            await client.rest.put(`/applications/${clientId}/commands`, { body: [] });
+        }
+        logger.info(`Registering ${commandsToRegister.length} global commands...`);
+        await client.rest.put(`/applications/${clientId}/commands`, { body: commandsToRegister });
+        logger.info(`Successfully registered ${commandsToRegister.length} global commands`);
     }
-
-    logger.info(`Registering ${commandsToRegister.length} guild commands (Immediate update)...`);
-    await client.rest.put(`/applications/${clientId}/guilds/${guildId}/commands`, { body: commandsToRegister });
-    logger.info(`Successfully registered ${commandsToRegister.length} guild commands for server ${guildId}`);
 }
 
-// 👈 修改這裡：讓 registerCommands 可以接收 guildId
 export async function registerCommands(client, options = {}) {
-    const { clientId = null, guildId = null } = options;
+    const { clientId = null, guildId = process.env.GUILD_ID || null } = options;
 
     try {
         const { commands, totalSubcommands } = collectCommandPayloads(client);
-        await registerGuildCommands(client, clientId, guildId, commands, totalSubcommands);
+        await registerCommandsTarget(client, clientId, guildId, commands, totalSubcommands);
     } catch (error) {
         logger.error('Error registering commands:', error);
         throw error;
