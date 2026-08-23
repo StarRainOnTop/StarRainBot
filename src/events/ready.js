@@ -1,7 +1,10 @@
 import { Events } from 'discord.js';
 import config from '../config/bot.js';
 import { logger, startupLog } from '../utils/logger.js';
-import { registerCommands } from '../handlers/commandHandler.js';
+
+// ✅ 1. 修正了這裡的路徑，指向新的 commandLoader.js
+import { registerCommands } from '../handlers/loaders/commandLoader.js';
+
 import { 
   reconcileReactionRoleMessages, 
   reconcileTicketPanels, 
@@ -16,11 +19,14 @@ export default {
 
   async execute(client) {
     try {
-      // ✅ 標記機器人已準備就緒，解決健康檢查回傳 Bot not Ready 的問題
-      client.isReady = true;
+      // ⚠️ 2. 避免 TypeError：Discord.js 內部 client.isReady() 是一個函數。
+      // 當 ready 事件觸發時，Discord.js 就會自動回傳 true，不需要手動覆蓋它。
+      // client.isReady = true;
 
-      // ✅ 讀取 config.presence
-      client.user.setPresence(config.presence);
+      // ✅ 讀取 config.presence 並設置狀態
+      if (config.presence) {
+         client.user.setPresence(config.presence);
+      }
 
       startupLog(`Ready! Logged in as ${client.user.tag}`);
       startupLog(`Serving ${client.guilds.cache.size} guild(s)`);
@@ -33,9 +39,13 @@ export default {
 
       startupLog(`Loaded ${client.commands.size} commands`);
 
+      // ⚠️ 3. 避免 ReferenceError：initRiffyAfterReady 沒有被 import！
+      // 而且你在 app.js 已經執行過 initializeMusic(this) 了，這段如果沒用到可以先註解掉。
+      /*
       if (client.config?.features?.music) {
-        initRiffyAfterReady(client);
+        // initRiffyAfterReady(client);
       }
+      */
 
       // 💡 背景執行面板健康檢查和同步
       (async () => {
