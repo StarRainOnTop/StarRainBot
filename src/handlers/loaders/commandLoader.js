@@ -3,7 +3,6 @@ import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { Collection } from 'discord.js';
 import { logger } from '../../utils/logger.js';
-import botConfig from '../../config/bot.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -247,21 +246,14 @@ async function registerCommandsTarget(client, clientId, guildId, commands, total
 
     try {
         if (guildId) {
-            logger.info(`Preparing to register ${totalSubcommands + commands.length} guild commands for server: ${guildId}`);
+            logger.info(`Preparing to register ${commandsToRegister.length} guild commands for server: ${guildId}`);
             
-            logger.info('Clearing existing guild commands before registration...');
-            await client.rest.put(`/applications/${clientId}/guilds/${guildId}/commands`, { body: [] });
-
-            logger.info(`Registering ${commandsToRegister.length} guild commands (Immediate update)...`);
+            // 直接更新指令，避免頻繁清空觸發 Discord API 限流而卡死
             await client.rest.put(`/applications/${clientId}/guilds/${guildId}/commands`, { body: commandsToRegister });
             logger.info(`Successfully registered ${commandsToRegister.length} guild commands for server ${guildId}`);
         } else {
-            logger.info(`Preparing to register ${totalSubcommands + commands.length} global commands...`);
+            logger.info(`Preparing to register ${commandsToRegister.length} global commands...`);
             
-            logger.info('Clearing existing global commands before registration...');
-            await client.rest.put(`/applications/${clientId}/commands`, { body: [] });
-
-            logger.info(`Registering ${commandsToRegister.length} global commands...`);
             await client.rest.put(`/applications/${clientId}/commands`, { body: commandsToRegister });
             logger.info(`Successfully registered ${commandsToRegister.length} global commands`);
         }
