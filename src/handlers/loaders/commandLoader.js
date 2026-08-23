@@ -233,7 +233,6 @@ function prepareCommandsForRegistration(commands) {
     return truncated;
 }
 
-// 💡 修正：改回支援可選伺服器（有 guildId 註冊到指定伺服器，沒有則走全域）
 async function registerCommandsTarget(client, clientId, guildId, commands, totalSubcommands) {
     if (!clientId) {
         throw new Error('CLIENT_ID is required for slash command registration');
@@ -248,19 +247,21 @@ async function registerCommandsTarget(client, clientId, guildId, commands, total
 
     if (guildId) {
         logger.info(`Preparing to register ${totalSubcommands + commands.length} guild commands for server: ${guildId}`);
-        if (botConfig.commands?.deleteCommands) {
-            logger.info('Clearing existing guild commands before registration...');
-            await client.rest.put(`/applications/${clientId}/guilds/${guildId}/commands`, { body: [] });
-        }
+        
+        // 強制每次都先清空伺服器舊指令
+        logger.info('Clearing existing guild commands before registration...');
+        await client.rest.put(`/applications/${clientId}/guilds/${guildId}/commands`, { body: [] });
+
         logger.info(`Registering ${commandsToRegister.length} guild commands (Immediate update)...`);
         await client.rest.put(`/applications/${clientId}/guilds/${guildId}/commands`, { body: commandsToRegister });
         logger.info(`Successfully registered ${commandsToRegister.length} guild commands for server ${guildId}`);
     } else {
         logger.info(`Preparing to register ${totalSubcommands + commands.length} global commands...`);
-        if (botConfig.commands?.deleteCommands) {
-            logger.info('Clearing existing global commands before registration...');
-            await client.rest.put(`/applications/${clientId}/commands`, { body: [] });
-        }
+        
+        // 強制每次都先清空全域舊指令
+        logger.info('Clearing existing global commands before registration...');
+        await client.rest.put(`/applications/${clientId}/commands`, { body: [] });
+
         logger.info(`Registering ${commandsToRegister.length} global commands...`);
         await client.rest.put(`/applications/${clientId}/commands`, { body: commandsToRegister });
         logger.info(`Successfully registered ${commandsToRegister.length} global commands`);
