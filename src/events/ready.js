@@ -18,8 +18,11 @@ export default {
       startupLog(`Ready! Logged in as ${client.user.tag}`);
       startupLog(`Serving ${client.guilds.cache.size} guild(s)`);
 
-      // 🚀 註冊並同步斜線指令到 Discord
-      await registerCommands(client, { clientId: client.user.id });
+      // 🚀 註冊並同步伺服器專屬指令 (帶入你的 guildId 實現秒級更新)
+      await registerCommands(client, { 
+        clientId: client.user.id, 
+        guildId: "783858618386219059" // <--- 填入你的 Discord 伺服器 ID
+      });
 
       startupLog(`Loaded ${client.commands.size} commands`);
 
