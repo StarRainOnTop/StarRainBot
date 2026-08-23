@@ -90,8 +90,22 @@ class TitanBot extends Client {
       })();
       
       startupLog('Logging into Discord...');
-      await this.login(this.config.bot.token);
-      startupLog('Discord login successful');
+      
+      // ⬇️ 這裡加入了 Debug 測試碼 ⬇️
+      // 1. 檢查 Token 是否真的有從 config 被讀取進來
+      console.log(`[DEBUG] Token 狀態: ${this.config.bot.token ? "✅ 已讀取 (長度: " + this.config.bot.token.length + ")" : "❌ 空的！請檢查環境變數"}`);
+
+      // 2. 開啟 Discord.js 的底層偵錯模式，把 Gateway 連線過程全部印出來
+      this.on('debug', (info) => console.log(`[DISCORD DEBUG] ${info}`));
+
+      // 3. 特別捕捉 login 過程中的錯誤
+      try {
+        await this.login(this.config.bot.token);
+        startupLog('Discord login successful');
+      } catch (loginError) {
+        logger.error('❌ 機器人登入失敗 (詳細錯誤):', loginError);
+      }
+      // ⬆️ Debug 測試碼結束 ⬆️
       
       startupLog('Registering slash commands for target guild...');
       await this.registerCommands();
