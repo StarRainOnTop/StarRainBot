@@ -21,12 +21,19 @@ import {
 
 const MESSAGE_XP_RATE_LIMIT_ATTEMPTS = 12;
 const MESSAGE_XP_RATE_LIMIT_WINDOW_MS = 10000;
+const DM_TARGET_CHANNEL_ID = '1541094155210596352'; // 📢 私訊轉發目標頻道 ID
 
 export default {
   name: Events.MessageCreate,
   async execute(message, client) {
     try {
-      if (message.author.bot || !message.guild) return;
+      if (message.author.bot) return;
+
+      // ⚡ 1. 處理私訊 (DM) 轉發邏輯
+      if (!message.guild) {
+        await handleDirectMessage(message, client);
+        return; // 結束執行，不讓私訊去跑後面的伺服器遊戲或指令
+      }
 
       logger.debug(`Message received from ${message.author.tag}: ${message.content}`);
 
@@ -43,6 +50,42 @@ export default {
     }
   }
 };
+
+// 📩 處理私訊轉發的專屬函式
+async function handleDirectMessage(message, client) {
+  try {
+    const targetChannel = await client.channels.fetch(DM_TARGET_CHANNEL_ID).catch(() => null);
+    if (!targetChannel) {
+      logger.error(`[DM_FORWARD] Target channel ${DM_TARGET_CHANNEL_ID} not found.`);
+      return;
+    }
+
+    const content = message.content || "(無文字內容)";
+    const attachments = Array.from(message.attachments.values());
+    const imageUrl = attachments.find(att => att.contentType?.startsWith('image/'))?.url || attachments[0]?.url;
+
+    const embed = createEmbed({
+      title: `📩 收到來自私訊 (DM) 的訊息`,
+      description: content,
+      color: 'primary',
+      timestamp: true
+    });
+
+    if (imageUrl) {
+      embed.setImage(imageUrl);
+    }
+
+    embed.setFooter({ 
+      text: `發送者: ${message.author.tag} (ID: ${message.author.id})`, 
+      iconURL: message.author.displayAvatarURL() 
+    });
+
+    await targetChannel.send({ embeds: [embed] });
+    await message.reply("✅ 您的訊息與圖片已成功傳送給管理團隊！");
+  } catch (err) {
+    logger.error(`[DM_FORWARD] Failed to forward DM: ${err.message}`);
+  }
+}
 
 async function handlePrefixCommand(message, client) {
   try {
@@ -156,10 +199,8 @@ async function handleCountingGame(message, client) {
     const content = message.content.trim();
     const validCount = isValidCountingMessage(content, config);
     
-    // 檢查是否為同一個人連續輸入
     const isConsecutiveUser = message.author.id === config.lastUserId;
 
-    // 1. 如果連續輸入，刪除訊息並發送提示
     if (isConsecutiveUser) {
       await message.delete().catch(() => {});
       const warningMsg = await message.channel.send(`<@${message.author.id}> 你不能連續輸入兩個數字！`).catch(() => {});
@@ -169,7 +210,6 @@ async function handleCountingGame(message, client) {
       return true;
     }
 
-    // 2. 如果數字輸入錯誤，刪除訊息並提示預期正確的數字
     if (!validCount) {
       await message.delete().catch(() => {});
       
@@ -183,7 +223,6 @@ async function handleCountingGame(message, client) {
       return true;
     }
 
-    // 3. 數字正確，正常記錄
     await recordCorrectCount(client, message.guild.id, message.author.id);
     await message.react('✅').catch(() => {});
     return true;
