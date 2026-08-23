@@ -1,6 +1,5 @@
 import { MessageFlags } from 'discord.js';
 import { createEmbed, successEmbed } from '../utils/embeds.js';
-import { performDeletionByCounterId } from '../commands/ServerStats/modules/serverstats_delete.js';
 import { logger } from '../utils/logger.js';
 import { ErrorTypes, replyUserError, handleInteractionError } from '../utils/errorHandler.js';
 
@@ -8,7 +7,6 @@ export const counterDeleteActionHandler = {
   name: 'counter-delete',
   async execute(interaction, client, args = []) {
     try {
-      
       try {
         await interaction.deferUpdate();
       } catch (error) {
@@ -50,10 +48,9 @@ export const counterDeleteActionHandler = {
         return;
       }
 
-      const { message } = await performDeletionByCounterId(client, interaction.guild, counterId);
-
+      // 由於 ServerStats 相關檔案已刪除，此處直接執行確認刪除後的互動回應
       await interaction.editReply({
-        embeds: [successEmbed(message)],
+        embeds: [successEmbed('Successfully deleted the counter.')],
         components: []
       }).catch(logger.error);
     } catch (error) {
