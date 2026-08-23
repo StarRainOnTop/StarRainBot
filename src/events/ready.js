@@ -1,13 +1,3 @@
-import { Events } from "discord.js";
-import { logger, startupLog } from "../utils/logger.js";
-import config from "../config/application.js";
-import { registerCommands } from "../handlers/loaders/commandLoader.js";
-import { reconcileReactionRoleMessages } from "../services/reactionRoleService.js";
-import { reconcileTicketPanels, reconcileVerificationPanels, reconcileReactionRolePanelHealth } from "../services/panelHealthService.js";
-import { reconcileLevelRoles } from "../services/leveling/levelRoleSyncService.js";
-import { initRiffyAfterReady } from "../services/music/riffySetup.js";
-import { initXpBoosterService } from "../services/xpBoosterService.js";
-
 export default {
   name: Events.ClientReady,
   once: true,
@@ -19,10 +9,10 @@ export default {
       startupLog(`Ready! Logged in as ${client.user.tag}`);
       startupLog(`Serving ${client.guilds.cache.size} guild(s)`);
 
-      // 🚀 註冊並同步伺服器專屬指令 (帶入你的 guildId 實現秒級更新)
+      // 🚀 註冊指令可以保留 await（確保指令第一時間可用）
       await registerCommands(client, { 
         clientId: client.user.id, 
-        guildId: "783858618386219059" // <--- 填入你的 Discord 伺服器 ID
+        guildId: "783858618386219059" 
       });
 
       startupLog(`Loaded ${client.commands.size} commands`);
@@ -31,30 +21,29 @@ export default {
         initRiffyAfterReady(client);
       }
 
-      const reconciliationSummary = await reconcileReactionRoleMessages(client);
-      startupLog(
-        `Reaction role reconciliation: scanned ${reconciliationSummary.scannedMessages}, removed ${reconciliationSummary.removedMessages}, errors ${reconciliationSummary.errors}`
-      );
+      // 💡 把所有的面板健康檢查和同步改到背景執行 (Background Promise)
+      // 這樣它們會在背景慢慢跑，絕對不會卡死你的互動事件！
+      (async () => {
+        try {
+          const reconciliationSummary = await reconcileReactionRoleMessages(client);
+          startupLog(`Reaction role reconciliation: scanned ${reconciliationSummary.scannedMessages}, removed ${reconciliationSummary.removedMessages}, errors ${reconciliationSummary.errors}`);
 
-      const ticketPanelSummary = await reconcileTicketPanels(client);
-      startupLog(
-        `Ticket panel health: scanned ${ticketPanelSummary.scannedGuilds} guilds, healthy ${ticketPanelSummary.healthyPanels}, deleted ${ticketPanelSummary.deletedPanels}, missing channel ${ticketPanelSummary.missingChannels}, recovered ${ticketPanelSummary.recoveredIds}, errors ${ticketPanelSummary.errors}`
-      );
+          const ticketPanelSummary = await reconcileTicketPanels(client);
+          startupLog(`Ticket panel health: scanned ${ticketPanelSummary.scannedGuilds} guilds, healthy ${ticketPanelSummary.healthyPanels}, deleted ${ticketPanelSummary.deletedPanels}, missing channel ${ticketPanelSummary.missingChannels}, recovered ${ticketPanelSummary.recoveredIds}, errors ${ticketPanelSummary.errors}`);
 
-      const verificationPanelSummary = await reconcileVerificationPanels(client);
-      startupLog(
-        `Verification panel health: scanned ${verificationPanelSummary.scannedGuilds} guilds, healthy ${verificationPanelSummary.healthyPanels}, deleted ${verificationPanelSummary.deletedPanels}, missing channel ${verificationPanelSummary.missingChannels}, recovered ${verificationPanelSummary.recoveredIds}, errors ${verificationPanelSummary.errors}`
-      );
+          const verificationPanelSummary = await reconcileVerificationPanels(client);
+          startupLog(`Verification panel health: scanned ${verificationPanelSummary.scannedGuilds} guilds, healthy ${verificationPanelSummary.healthyPanels}, deleted ${verificationPanelSummary.deletedPanels}, missing channel ${verificationPanelSummary.missingChannels}, recovered ${verificationPanelSummary.recoveredIds}, errors ${verificationPanelSummary.errors}`);
 
-      const reactionRolePanelSummary = await reconcileReactionRolePanelHealth(client);
-      startupLog(
-        `Reaction role panel health: scanned ${reactionRolePanelSummary.scannedPanels} panels, healthy ${reactionRolePanelSummary.healthyPanels}, deleted ${reactionRolePanelSummary.deletedPanels}, missing channel ${reactionRolePanelSummary.missingChannels}, recovered ${reactionRolePanelSummary.recoveredIds}, errors ${reactionRolePanelSummary.errors}`
-      );
+          const reactionRolePanelSummary = await reconcileReactionRolePanelHealth(client);
+          startupLog(`Reaction role panel health: scanned ${reactionRolePanelSummary.scannedPanels} panels, healthy ${reactionRolePanelSummary.healthyPanels}, deleted ${reactionRolePanelSummary.deletedPanels}, missing channel ${reactionRolePanelSummary.missingChannels}, recovered ${reactionRolePanelSummary.recoveredIds}, errors ${reactionRolePanelSummary.errors}`);
 
-      const levelRoleSummary = await reconcileLevelRoles(client);
-      startupLog(
-        `Level role sync: scanned ${levelRoleSummary.scannedGuilds} guilds, pruned ${levelRoleSummary.prunedRewardEntries} stale rewards, re-awarded ${levelRoleSummary.rolesReAwarded} roles, errors ${levelRoleSummary.errors}`
-      );
+          const levelRoleSummary = await reconcileLevelRoles(client);
+          startupLog(`Level role sync: scanned ${levelRoleSummary.scannedGuilds} guilds, pruned ${levelRoleSummary.prunedRewardEntries} stale rewards, re-awarded ${levelRoleSummary.rolesReAwarded} roles, errors ${levelRoleSummary.errors}`);
+        } catch (bgError) {
+          logger.error("Error in background reconciliation tasks:", bgError);
+        }
+      })();
+
     } catch (error) {
       logger.error("Error in ready event:", error);
     }
