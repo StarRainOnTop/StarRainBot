@@ -24,7 +24,7 @@ export const botConfig = {
     activities: [
       {
         name: "", // required by Discord API, not shown in the client
-        state: "正在跟星雨玩床戰",     // this is what people actually see
+        state: "正在跟星雨玩床戰",   // this is what people actually see
         type: 0,               // Custom
       },
     ],
@@ -42,7 +42,7 @@ export const botConfig = {
     defaultCooldown: 3,
 
     // If true, old commands are removed before re-registering.
-    deleteCommands: false,
+    deleteCommands: true,
 
     // Optional server ID retained for tutorial compatibility; not used for command registration.
     testGuildId: process.env.TEST_GUILD_ID,
