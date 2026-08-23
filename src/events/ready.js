@@ -1,3 +1,11 @@
+import { Events } from 'discord.js';
+import config from '../../config.js'; // 請根據你實際的 config.js 檔案路徑調整
+import { logger, startupLog } from '../utils/logger.js'; // 請根據你實際的 logger 工具路徑調整
+
+// 如果這些背景任務函數是從其他檔案匯入的，請確保也有正確 import，例如：
+// import { registerCommands } from '../handlers/commandHandler.js';
+// import { reconcileReactionRoleMessages, reconcileTicketPanels, reconcileVerificationPanels, reconcileReactionRolePanelHealth, reconcileLevelRoles } from '../services/reconcile.js';
+
 export default {
   name: Events.ClientReady,
   once: true,
