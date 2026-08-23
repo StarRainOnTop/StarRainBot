@@ -16,6 +16,9 @@ export default {
 
   async execute(client) {
     try {
+      // ✅ 標記機器人已準備就緒，解決健康檢查回傳 Bot not Ready 的問題
+      client.isReady = true;
+
       // ✅ 讀取 config.presence
       client.user.setPresence(config.presence);
 
