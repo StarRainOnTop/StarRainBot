@@ -220,7 +220,7 @@ function validateCommands(commands) {
 
 function prepareCommandsForRegistration(commands) {
     if (commands.length >= COMMAND_COUNT_WARN_THRESHOLD) {
-        logger.warn(`Command count (${commands.length}) is near Discord's ${MAX_COMMANDS} global command limit`);
+        logger.warn(`Command count (${commands.length}) is near Discord's ${MAX_COMMANDS} guild command limit`);
     }
 
     if (commands.length <= MAX_COMMANDS) {
@@ -233,16 +233,20 @@ function prepareCommandsForRegistration(commands) {
     return truncated;
 }
 
-async function registerGlobalCommands(client, clientId, commands, totalSubcommands) {
+// 👈 修改這裡：從 registerGlobalCommands 改為 registerGuildCommands 並指定 guildId 路徑
+async function registerGuildCommands(client, clientId, guildId, commands, totalSubcommands) {
     if (!clientId) {
         throw new Error('CLIENT_ID is required for slash command registration');
+    }
+    if (!guildId) {
+        throw new Error('GUILD_ID is required for single-server command registration');
     }
 
     if (!client.rest) {
         throw new Error('Discord REST client is not available for slash command registration');
     }
 
-    logger.info(`Preparing to register ${totalSubcommands + commands.length} global commands`);
+    logger.info(`Preparing to register ${totalSubcommands + commands.length} guild commands for server: ${guildId}`);
     logger.info('Validating commands before registration...');
     validateCommands(commands);
     logger.info('Command validation passed');
@@ -250,22 +254,22 @@ async function registerGlobalCommands(client, clientId, commands, totalSubcomman
     const commandsToRegister = prepareCommandsForRegistration(commands);
 
     if (botConfig.commands?.deleteCommands) {
-        logger.info('Clearing existing global commands before registration...');
-        await client.rest.put(`/applications/${clientId}/commands`, { body: [] });
+        logger.info('Clearing existing guild commands before registration...');
+        await client.rest.put(`/applications/${clientId}/guilds/${guildId}/commands`, { body: [] });
     }
 
-    logger.info(`Registering ${commandsToRegister.length} global commands...`);
-    await client.rest.put(`/applications/${clientId}/commands`, { body: commandsToRegister });
-    logger.info(`Successfully registered ${commandsToRegister.length} global commands`);
-    logger.info('Global commands may take up to an hour to update across Discord.');
+    logger.info(`Registering ${commandsToRegister.length} guild commands (Immediate update)...`);
+    await client.rest.put(`/applications/${clientId}/guilds/${guildId}/commands`, { body: commandsToRegister });
+    logger.info(`Successfully registered ${commandsToRegister.length} guild commands for server ${guildId}`);
 }
 
+// 👈 修改這裡：讓 registerCommands 可以接收 guildId
 export async function registerCommands(client, options = {}) {
-    const { clientId = null } = options;
+    const { clientId = null, guildId = null } = options;
 
     try {
         const { commands, totalSubcommands } = collectCommandPayloads(client);
-        await registerGlobalCommands(client, clientId, commands, totalSubcommands);
+        await registerGuildCommands(client, clientId, guildId, commands, totalSubcommands);
     } catch (error) {
         logger.error('Error registering commands:', error);
         throw error;
