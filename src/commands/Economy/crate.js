@@ -109,7 +109,6 @@ export default {
         for (let i = 0; i < count; i++) {
             const prize = rollCrate();
             
-            // 複製一份獎品物件以避免多連抽時名稱被共用覆寫
             const prizeRecord = { ...prize };
             results.push(prizeRecord);
 
@@ -122,24 +121,13 @@ export default {
             } else if (prizeRecord.type === 'role') {
                 try {
                     if (prizeRecord.roleId) {
-                        // 檢查玩家是否已經擁有該身分組
                         if (!member.roles.cache.has(prizeRecord.roleId)) {
                             await member.roles.add(prizeRecord.roleId);
 
-                            // ⚡ 如果是經驗加成卡，設定 24 小時後自動移除
+                            // ⚡ 如果是經驗加成卡，記錄 24 小時後的過期時間戳記（改用資料庫持久化檢查）
                             if (prizeRecord.roleId === XP_BOOSTER_ROLE_ID) {
                                 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
-                                setTimeout(async () => {
-                                    try {
-                                        const fetchedMember = await interaction.guild.members.fetch(userId).catch(() => null);
-                                        if (fetchedMember && fetchedMember.roles.cache.has(XP_BOOSTER_ROLE_ID)) {
-                                            await fetchedMember.roles.remove(XP_BOOSTER_ROLE_ID, 'XP Booster card expired after 24 hours');
-                                            logger.info(`[XP_BOOSTER] Removed expired XP booster role from user ${userId}`);
-                                        }
-                                    } catch (err) {
-                                        logger.error(`[XP_BOOSTER] Failed to remove expired role: ${err.message}`);
-                                    }
-                                }, ONE_DAY_MS);
+                                userData.xpBoosterExpiresAt = Date.now() + ONE_DAY_MS;
                             }
                         } else {
                             // 💡 重複獲得身分組的保底補償機制：轉化為 $3,500 現金
