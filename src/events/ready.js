@@ -1,6 +1,7 @@
 import { Events } from "discord.js";
 import { logger, startupLog } from "../utils/logger.js";
 import config from "../config/application.js";
+import { registerCommands } from "../handlers/loaders/commandLoader.js";
 import { reconcileReactionRoleMessages } from "../services/reactionRoleService.js";
 import { reconcileTicketPanels, reconcileVerificationPanels, reconcileReactionRolePanelHealth } from "../services/panelHealthService.js";
 import { reconcileLevelRoles } from "../services/leveling/levelRoleSyncService.js";
@@ -16,6 +17,10 @@ export default {
 
       startupLog(`Ready! Logged in as ${client.user.tag}`);
       startupLog(`Serving ${client.guilds.cache.size} guild(s)`);
+
+      // 🚀 註冊並同步斜線指令到 Discord
+      await registerCommands(client, { clientId: client.user.id });
+
       startupLog(`Loaded ${client.commands.size} commands`);
 
       if (client.config?.features?.music) {
