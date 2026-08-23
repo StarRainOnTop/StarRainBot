@@ -1,8 +1,8 @@
 /**
- * Prefix command restrictions — dashboard and advanced setup flows stay slash-only.
+ * 前綴指令限制 — 儀表板與進階設定流程維持僅限 Slash 指令。
  */
 
-/** Top-level commands that cannot be invoked via prefix at all. */
+/** 完全無法透過前綴呼叫的頂層指令。 */
 export const SLASH_ONLY_COMMANDS = new Set([
   'configwizard',
   'help',
@@ -11,18 +11,18 @@ export const SLASH_ONLY_COMMANDS = new Set([
   'apply',
 ]);
 
-/** Subcommands blocked for every command when invoked via prefix. */
+/** 當透過前綴呼叫時，所有指令皆被封鎖的子指令。 */
 export const GLOBAL_BLOCKED_SUBCOMMANDS = new Set([
   'dashboard',
   'setup',
 ]);
 
-/** Subcommand groups blocked for every command when invoked via prefix. */
+/** 當透過前綴呼叫時，所有指令皆被封鎖的子指令群組。 */
 export const GLOBAL_BLOCKED_SUBCOMMAND_GROUPS = new Set([
   'config',
 ]);
 
-/** Per-command subcommands that stay slash-only (beyond the global block list). */
+/** 維持僅限 Slash 指令的個別指令子指令（超出全域封鎖清單）。 */
 export const COMMAND_BLOCKED_SUBCOMMANDS = {
   music: new Set([
     'shuffle',
@@ -65,10 +65,10 @@ function isSubcommandBlocked(commandName, subcommandName) {
 }
 
 /**
- * Returns whether a prefix invocation should be rejected.
- * @param {object} command - Loaded command module
- * @param {string[]} args - Parsed prefix arguments (after command name)
- * @param {(name: string) => string} resolveSubcommandAlias
+ * 傳回是否應拒絕前綴（Prefix）呼叫。
+ * @param {object} command - 已載入的指令模組
+ * @param {string[]} args - 已解析的前綴參數（位於指令名稱之後）
+ * @param {(name: string) => string} resolveSubcommandAlias - 解析子指令別名函式
  * @returns {{ blocked: boolean, reason?: string }}
  */
 export function getPrefixRestriction(command, args, resolveSubcommandAlias) {
@@ -80,11 +80,11 @@ export function getPrefixRestriction(command, args, resolveSubcommandAlias) {
   const commandName = commandJson.name?.toLowerCase();
 
   if (command.prefixOnly === false || command.slashOnly === true) {
-    return { blocked: true, reason: 'This command is only available as a slash command.' };
+    return { blocked: true, reason: '此指令僅支援 Slash 指令使用。' };
   }
 
   if (SLASH_ONLY_COMMANDS.has(commandName)) {
-    return { blocked: true, reason: 'This command is only available as a slash command.' };
+    return { blocked: true, reason: '此指令僅支援 Slash 指令使用。' };
   }
 
   const [firstArg, secondArg] = args.map((arg) => arg?.toLowerCase?.() || null);
@@ -99,27 +99,27 @@ export function getPrefixRestriction(command, args, resolveSubcommandAlias) {
     allSubcommandNames.every((name) => isSubcommandBlocked(commandName, name));
 
   if (allSubcommandsBlocked) {
-    return { blocked: true, reason: 'This command is only available as a slash command.' };
+    return { blocked: true, reason: '此指令僅支援 Slash 指令使用。' };
   }
 
   if (firstArg && GLOBAL_BLOCKED_SUBCOMMAND_GROUPS.has(firstArg)) {
     return {
       blocked: true,
-      reason: 'This configuration flow is only available as a slash command.',
+      reason: '此設定流程僅支援 Slash 指令使用。',
     };
   }
 
   if (resolvedFirstArg && isSubcommandBlocked(commandName, resolvedFirstArg)) {
     return {
       blocked: true,
-      reason: 'This subcommand is only available as a slash command.',
+      reason: '此子指令僅支援 Slash 指令使用。',
     };
   }
 
   if (subcommandGroup && resolvedSecondArg && isSubcommandBlocked(commandName, resolvedSecondArg)) {
     return {
       blocked: true,
-      reason: 'This subcommand is only available as a slash command.',
+      reason: '此子指令僅支援 Slash 指令使用。',
     };
   }
 
