@@ -245,26 +245,34 @@ async function registerCommandsTarget(client, clientId, guildId, commands, total
     validateCommands(commands);
     const commandsToRegister = prepareCommandsForRegistration(commands);
 
-    if (guildId) {
-        logger.info(`Preparing to register ${totalSubcommands + commands.length} guild commands for server: ${guildId}`);
-        
-        // 強制每次都先清空伺服器舊指令
-        logger.info('Clearing existing guild commands before registration...');
-        await client.rest.put(`/applications/${clientId}/guilds/${guildId}/commands`, { body: [] });
+    try {
+        if (guildId) {
+            logger.info(`Preparing to register ${totalSubcommands + commands.length} guild commands for server: ${guildId}`);
+            
+            logger.info('Clearing existing guild commands before registration...');
+            await client.rest.put(`/applications/${clientId}/guilds/${guildId}/commands`, { body: [] });
 
-        logger.info(`Registering ${commandsToRegister.length} guild commands (Immediate update)...`);
-        await client.rest.put(`/applications/${clientId}/guilds/${guildId}/commands`, { body: commandsToRegister });
-        logger.info(`Successfully registered ${commandsToRegister.length} guild commands for server ${guildId}`);
-    } else {
-        logger.info(`Preparing to register ${totalSubcommands + commands.length} global commands...`);
-        
-        // 強制每次都先清空全域舊指令
-        logger.info('Clearing existing global commands before registration...');
-        await client.rest.put(`/applications/${clientId}/commands`, { body: [] });
+            logger.info(`Registering ${commandsToRegister.length} guild commands (Immediate update)...`);
+            await client.rest.put(`/applications/${clientId}/guilds/${guildId}/commands`, { body: commandsToRegister });
+            logger.info(`Successfully registered ${commandsToRegister.length} guild commands for server ${guildId}`);
+        } else {
+            logger.info(`Preparing to register ${totalSubcommands + commands.length} global commands...`);
+            
+            logger.info('Clearing existing global commands before registration...');
+            await client.rest.put(`/applications/${clientId}/commands`, { body: [] });
 
-        logger.info(`Registering ${commandsToRegister.length} global commands...`);
-        await client.rest.put(`/applications/${clientId}/commands`, { body: commandsToRegister });
-        logger.info(`Successfully registered ${commandsToRegister.length} global commands`);
+            logger.info(`Registering ${commandsToRegister.length} global commands...`);
+            await client.rest.put(`/applications/${clientId}/commands`, { body: commandsToRegister });
+            logger.info(`Successfully registered ${commandsToRegister.length} global commands`);
+        }
+    } catch (error) {
+        logger.error('❌ Failed to register commands with Discord API!');
+        if (error.rawError) {
+            logger.error('Discord Raw Error:', JSON.stringify(error.rawError, null, 2));
+        } else {
+            logger.error('Error details:', error);
+        }
+        throw error;
     }
 }
 
