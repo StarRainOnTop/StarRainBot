@@ -22,13 +22,13 @@ class TitanBot extends Client {
     super({
       intents: [
         GatewayIntentBits.Guilds,                        
-        GatewayIntentBits.GuildMembers,                    
-        GatewayIntentBits.GuildMessages,                   
-        GatewayIntentBits.GuildMessageReactions,           
-        GatewayIntentBits.MessageContent,                  
+        GatewayIntentBits.GuildMembers,                        
+        GatewayIntentBits.GuildMessages,                         
+        GatewayIntentBits.GuildMessageReactions,         
+        GatewayIntentBits.MessageContent,                      
         GatewayIntentBits.DirectMessages,
-        GatewayIntentBits.GuildVoiceStates,                
-        GatewayIntentBits.GuildBans,                       
+        GatewayIntentBits.GuildVoiceStates,                      
+        GatewayIntentBits.GuildBans,                             
       ],
     });
 
@@ -79,7 +79,15 @@ class TitanBot extends Client {
       await this.loadHandlers();
       startupLog('Handlers loaded');
 
-      initializeMusic(this);
+      // 💡 改成非同步背景初始化音樂，避免 Lavalink 節點連線卡死主執行緒
+      (async () => {
+        try {
+          startupLog('Initializing music nodes in background...');
+          await initializeMusic(this);
+        } catch (musicErr) {
+          logger.warn('⚠️ Music initialization warning (non-fatal):', musicErr.message);
+        }
+      })();
       
       startupLog('Logging into Discord...');
       await this.login(this.config.bot.token);
