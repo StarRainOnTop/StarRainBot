@@ -4,12 +4,26 @@ import { getEconomyData, setEconomyData } from '../../utils/economy.js';
 import { withErrorHandling, createError, ErrorTypes } from '../../utils/errorHandler.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
 
-const SUCCESS_COOLDOWN = 15 * 60 * 1000; // 成功後冷卻 15 分鐘
-const FAILURE_COOLDOWN = 30 * 60 * 1000; // 失敗後冷卻 30 分鐘
-const JAIL_TIME = 1 * 60 * 60 * 1000; // 坐牢時間（你已自行調整，保留原值）
-const FINE_RATE = 0.2; // 罰款比例（潛在收益的 20%）
-const MAX_FINE = 5000; // 罰款上限
+// ─── 犯罪冷卻與懲罰設定 ───
+const SUCCESS_COOLDOWN = 15 * 60 * 1000;      // 成功後冷卻 15 分鐘
+const FAILURE_COOLDOWN = 30 * 60 * 1000;      // 失敗後冷卻 30 分鐘
+const JAIL_TIME = 1 * 60 * 60 * 1000;         // 坐牢時間（保持原樣）
+const FINE_RATE = 0.2;                        // 罰款比例（潛在收益的 20%）
+const MAX_FINE = 5000;                        // 罰款上限
 
+// ─── 犯罪熟練度設定 ───
+const XP_PER_ATTEMPT = 10;                    // 每次犯罪獲得的經驗值
+const LEVEL_RISK_REDUCTION = 0.01;            // 每級降低失敗率 1%
+const LEVEL_REWARD_MULTIPLIER = 0.02;         // 每級提升獎勵 2%
+const MAX_RISK_REDUCTION = 0.30;              // 最多降低 30% 失敗率
+const MAX_REWARD_MULTIPLIER = 2.0;            // 獎勵最高 2 倍
+
+// 計算升級所需經驗
+function getXpForNextLevel(level) {
+    return level * 100 + 100; // 每級需求遞增
+}
+
+// ─── 犯罪類型 ───
 const CRIME_TYPES = [
     { name: "Pickpocketing", min: 100, max: 500, risk: 0.3 },
     { name: "Burglary", min: 300, max: 1200, risk: 0.4 },
@@ -23,15 +37,77 @@ const CRIME_TYPES = [
     { name: "International Trafficking", min: 12000, max: 30000, risk: 0.92 },
 ];
 
-// 動態風險因子：越有錢，失敗率越高（最低 0.5 倍，最高 2 倍）
+// ─── 動態風險因子：越有錢，失敗率越高 ───
 function getRiskMultiplier(totalWealth) {
     const minMultiplier = 0.5;
     const maxMultiplier = 2.0;
-    const wealthFactor = totalWealth / 100000; // 每 10 萬資產增加 0.5 倍風險
+    const wealthFactor = totalWealth / 100000;   // 每 10 萬資產增加 0.5 倍風險
     const multiplier = minMultiplier + wealthFactor * 0.5;
     return Math.min(maxMultiplier, Math.max(minMultiplier, multiplier));
 }
 
+// ─── 隨機事件系統 ───
+// 事件機率（成功與失敗分開）
+const SUCCESS_EVENT_CHANCE = 0.25;
+const FAILURE_EVENT_CHANCE = 0.30;
+
+// 成功時可能觸發的事件
+const SUCCESS_EVENTS = [
+    {
+        name: "意外之財",
+        description: "你在現場意外發現了額外的財物！",
+        effect: { cashBonus: 1000, message: "獲得額外 $1,000！" }
+    },
+    {
+        name: "乾淨俐落",
+        description: "你完美地執行任務，沒有留下任何痕跡。",
+        effect: { cooldownReduction: 0.5, message: "冷卻時間減半！" }
+    },
+    {
+        name: "名聲大噪",
+        description: "你的成功在道上傳開，經驗值翻倍！",
+        effect: { xpBonus: 2, message: "本次經驗值 x2！" }
+    },
+    {
+        name: "神秘贊助",
+        description: "一位神秘人物欣賞你的手法，給了你一筆資金。",
+        effect: { cashBonus: 2000, message: "獲得額外 $2,000！" }
+    }
+];
+
+// 失敗時可能觸發的事件
+const FAILURE_EVENTS = [
+    {
+        name: "同夥背叛",
+        description: "你的同夥出賣了你，罰款加倍！",
+        effect: { fineMultiplier: 2, message: "罰款加倍！" }
+    },
+    {
+        name: "警察暴力",
+        description: "你被逮捕時遭到不當對待，坐牢時間延長。",
+        effect: { jailExtension: 0.5, message: "坐牢時間延長 50%！" }
+    },
+    {
+        name: "幸運逃脫",
+        description: "你在混亂中成功逃脫，免於坐牢。",
+        effect: { jailRemoved: true, message: "你成功逃脫，不用坐牢！" }
+    },
+    {
+        name: "貴人相助",
+        description: "一位有影響力的人出面幫你，罰款減半。",
+        effect: { fineMultiplier: 0.5, message: "罰款減半！" }
+    }
+];
+
+// 取得隨機事件
+function getRandomEvent(isSuccess) {
+    const eventList = isSuccess ? SUCCESS_EVENTS : FAILURE_EVENTS;
+    const chance = isSuccess ? SUCCESS_EVENT_CHANCE : FAILURE_EVENT_CHANCE;
+    if (Math.random() > chance) return null;
+    return eventList[Math.floor(Math.random() * eventList.length)];
+}
+
+// ─── 主指令 ───
 export default {
     data: new SlashCommandBuilder()
         .setName('crime')
@@ -100,21 +176,87 @@ export default {
             );
         }
 
-        // 取得玩家總資產（錢包 + 銀行）
+        // ─── 犯罪熟練度處理 ───
+        const crimeLevel = userData.crimeLevel || 0;
+        const crimeXp = userData.crimeXp || 0;
+
+        // 添加經驗
+        userData.crimeXp = crimeXp + XP_PER_ATTEMPT;
+
+        // 升級檢查
+        while (userData.crimeXp >= getXpForNextLevel(crimeLevel)) {
+            userData.crimeXp -= getXpForNextLevel(crimeLevel);
+            userData.crimeLevel = (userData.crimeLevel || 0) + 1;
+        }
+        const newLevel = userData.crimeLevel || 0;
+
+        // 熟練度效果
+        const riskReduction = Math.min(crimeLevel * LEVEL_RISK_REDUCTION, MAX_RISK_REDUCTION);
+        const rewardMultiplier = Math.min(1 + (crimeLevel * LEVEL_REWARD_MULTIPLIER), MAX_REWARD_MULTIPLIER);
+
+        // ─── 總資產與動態風險 ───
         const totalWealth = (userData.wallet || 0) + (userData.bank || 0);
-        // 根據資產動態調整失敗率
         const riskMultiplier = getRiskMultiplier(totalWealth);
-        const adjustedRisk = Math.min(0.95, crime.risk * riskMultiplier); // 失敗率最高 95%，避免必敗
+        const adjustedRisk = Math.max(0.05, (crime.risk * riskMultiplier) - riskReduction);
 
+        // 判定成功與否
         const isSuccess = Math.random() > adjustedRisk;
-        const amountEarned = isSuccess
-            ? Math.floor(Math.random() * (crime.max - crime.min + 1)) + crime.min
-            : 0;
 
+        // 基礎獎勵（成功時）
+        let amountEarned = 0;
+        if (isSuccess) {
+            amountEarned = Math.floor(
+                (Math.random() * (crime.max - crime.min + 1) + crime.min) * rewardMultiplier
+            );
+        }
+
+        // ─── 隨機事件 ───
+        const event = getRandomEvent(isSuccess);
+        let eventMessage = '';
+        let eventApplied = false;
+        let cashBonus = 0;
+        let fineMultiplier = 1;
+        let jailTimeModifier = 1;
+        let cooldownReduction = 1;
+        let xpMultiplier = 1;
+
+        if (event) {
+            eventApplied = true;
+            eventMessage = `\n\n🎲 **隨機事件：${event.name}**\n${event.description} ${event.effect.message}`;
+
+            // 套用事件效果
+            if (isSuccess) {
+                if (event.effect.cashBonus) {
+                    cashBonus = event.effect.cashBonus;
+                    amountEarned += cashBonus;
+                }
+                if (event.effect.cooldownReduction) {
+                    cooldownReduction = event.effect.cooldownReduction;
+                }
+                if (event.effect.xpBonus) {
+                    xpMultiplier = event.effect.xpBonus;
+                    userData.crimeXp = (userData.crimeXp || 0) + XP_PER_ATTEMPT * (xpMultiplier - 1);
+                }
+            } else {
+                if (event.effect.fineMultiplier) {
+                    fineMultiplier = event.effect.fineMultiplier;
+                }
+                if (event.effect.jailExtension) {
+                    jailTimeModifier = 1 + event.effect.jailExtension;
+                }
+                if (event.effect.jailRemoved) {
+                    jailTimeModifier = 0; // 不用坐牢
+                }
+            }
+        }
+
+        // ─── 設定冷卻時間 ───
+        const baseCooldown = isSuccess ? SUCCESS_COOLDOWN : FAILURE_COOLDOWN;
+        const finalCooldown = Math.floor(baseCooldown * cooldownReduction);
         userData.cooldowns = userData.cooldowns || {};
-        // 成功與失敗有不同的冷卻時間
-        userData.cooldowns.crime = isSuccess ? now + SUCCESS_COOLDOWN : now + FAILURE_COOLDOWN;
+        userData.cooldowns.crime = now + finalCooldown;
 
+        // ─── 成功處理 ───
         if (isSuccess) {
             userData.wallet = (userData.wallet || 0) + amountEarned;
 
@@ -122,15 +264,21 @@ export default {
 
             const embed = successEmbed(
                 "🕵️ 犯罪成功！",
-                `你成功進行了 **${crime.name}**，賺取了 **$${amountEarned.toLocaleString()}**！\n` +
-                `（成功率加成：富人風險 x${riskMultiplier.toFixed(2)}）`
+                `你成功進行了 **${crime.name}**，賺取了 **$${amountEarned.toLocaleString()}**！` +
+                (rewardMultiplier > 1 ? `\n（熟練度加成 x${rewardMultiplier.toFixed(2)}）` : '') +
+                (eventMessage ? eventMessage : '')
+            );
+            embed.addFields(
+                { name: '犯罪等級', value: `Lv.${newLevel}`, inline: true },
+                { name: '冷卻時間', value: `${finalCooldown / 60000} 分鐘`, inline: true }
             );
 
             await InteractionHelper.safeEditReply(interaction, { embeds: [embed] });
         } else {
+            // 失敗：罰款計算
             const potentialHaul = Math.floor((crime.min + crime.max) / 2);
-            // 罰款 = 潛在收益 * 比例，但不超過上限
-            const fine = Math.min(Math.floor(potentialHaul * FINE_RATE), MAX_FINE);
+            let fine = Math.min(Math.floor(potentialHaul * FINE_RATE), MAX_FINE);
+            fine = Math.floor(fine * fineMultiplier);
 
             const totalMoney = (userData.wallet || 0) + (userData.bank || 0);
             const actualFinePaid = Math.min(fine, totalMoney);
@@ -143,15 +291,29 @@ export default {
                 userData.bank = Math.max(0, userData.bank - remainingFine);
             }
 
-            userData.jailedUntil = now + JAIL_TIME;
+            // 坐牢時間處理
+            let jailTime = JAIL_TIME * jailTimeModifier;
+            if (jailTime > 0) {
+                userData.jailedUntil = now + jailTime;
+            } else {
+                // 若事件完全免除坐牢，則清除 jailedUntil
+                userData.jailedUntil = 0;
+            }
 
             await setEconomyData(client, guildId, userId, userData);
 
+            const jailText = jailTime > 0
+                ? `且必須在監獄裡待上 **${Math.ceil(jailTime / 60000)} 分鐘**`
+                : '但幸運地逃過了坐牢';
             const embed = warningEmbed(
                 "🚔 犯罪失敗！",
                 `你在嘗試 **${crime.name}** 時被抓包並送進了監獄！\n` +
-                `你被罰款 **$${actualFinePaid.toLocaleString()}**（已自動從現金與銀行扣除）且必須在監獄裡待上 1 小時。\n` +
-                `（失敗率已因資產調整，目前風險 x${riskMultiplier.toFixed(2)}）`
+                `你被罰款 **$${actualFinePaid.toLocaleString()}**（已自動從現金與銀行扣除）${jailText}。` +
+                (eventMessage ? eventMessage : '')
+            );
+            embed.addFields(
+                { name: '犯罪等級', value: `Lv.${newLevel}`, inline: true },
+                { name: '冷卻時間', value: `${finalCooldown / 60000} 分鐘`, inline: true }
             );
 
             await InteractionHelper.safeEditReply(interaction, { embeds: [embed] });
