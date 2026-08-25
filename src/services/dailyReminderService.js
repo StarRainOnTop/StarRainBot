@@ -6,21 +6,24 @@ import { createEmbed } from '../utils/embeds.js';
 export async function checkDailyReminders(client) {
     const now = Date.now();
 
-    // 🔍 從資料庫取得所有用戶的經濟資料
-    // 注意：需要根據你的資料庫結構調整查詢
-    const allUsers = await getAllEconomyData(client);
+    // 🔍 掃描所有經濟資料 key
+    const allEconomyKeys = await getAllEconomyKeys(client);
 
-    for (const userData of allUsers) {
-        // 檢查是否有設定提醒、時間是否已到、是否已發送過
+    for (const key of allEconomyKeys) {
+        // 從 key 解析出 guildId 和 userId
+        const { guildId, userId } = parseEconomyKey(key);
+        if (!guildId || !userId) continue;
+
+        const userData = await getEconomyData(client, guildId, userId);
+        if (!userData) continue;
+
+        // 確認有設定提醒且時間已到，且尚未發送過
         if (!userData.nextReminderAt || now < userData.nextReminderAt || userData.reminderSent) {
             continue;
         }
 
-        const userId = userData.userId;
-        const guildId = userData.guildId;
-
         try {
-            const user = await client.users.fetch(userId);
+            const user = await client.users.fetch(userId).catch(() => null);
             if (!user) continue;
 
             const dmEmbed = createEmbed({
@@ -31,7 +34,7 @@ export async function checkDailyReminders(client) {
 
             // ✅ 更新提醒已發送
             userData.reminderSent = true;
-            userData.nextReminderAt = null; // 清除提醒時間，直到下次領取再設定
+            userData.nextReminderAt = null; // 清除提醒時間
             await setEconomyData(client, guildId, userId, userData);
 
             logger.info(`Daily reminder sent to user ${userId} in guild ${guildId}`);
@@ -41,33 +44,35 @@ export async function checkDailyReminders(client) {
     }
 }
 
-// ⚠️ 這個函式需要根據你的資料庫實作來取得所有用戶資料
-async function getAllEconomyData(client) {
-    // 假設你使用 PostgreSQL，且經濟資料存在一個名為 "economy" 的表中
-    // 欄位包含 user_id, guild_id, next_reminder_at, reminder_sent 等
-    // 請根據實際 Schema 調整 SQL 查詢
-    
-    // 範例 SQL：
-    const query = `
-        SELECT 
-            user_id AS "userId",
-            guild_id AS "guildId",
-            wallet,
-            bank,
-            last_daily AS "lastDaily",
-            daily_streak AS "dailyStreak",
-            reminder_sent AS "reminderSent",
-            next_reminder_at AS "nextReminderAt"
-        FROM economy
-        WHERE next_reminder_at IS NOT NULL AND reminder_sent = false
-    `;
-
+// 取得所有經濟資料的 key（例如 guild:123:economy:456）
+async function getAllEconomyKeys(client) {
     try {
-        // 假設 client.db 有 pool 可以查詢
-        const result = await client.db.pool.query(query);
-        return result.rows;
+        if (!client.db || typeof client.db.list !== 'function') {
+            return [];
+        }
+
+        const allKeys = await client.db.list('guild:');
+        if (!Array.isArray(allKeys)) {
+            return [];
+        }
+
+        // 過濾出 economy 相關的 key
+        return allKeys.filter(key => key.includes(':economy:'));
     } catch (error) {
-        logger.error('Failed to fetch all economy data for reminders:', error);
+        logger.error('Failed to list economy keys:', error);
         return [];
     }
+}
+
+// 從 key 解析出 guildId 和 userId
+// key 格式範例: guild:123456789:economy:987654321
+function parseEconomyKey(key) {
+    const parts = key.split(':');
+    if (parts.length >= 4 && parts[0] === 'guild' && parts[2] === 'economy') {
+        return {
+            guildId: parts[1],
+            userId: parts[3]
+        };
+    }
+    return { guildId: null, userId: null };
 }
