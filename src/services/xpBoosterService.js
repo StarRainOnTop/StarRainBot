@@ -7,7 +7,6 @@ const XP_BOOSTER_ROLE_ID = '1540410469406220358'; // 與 crate.js 中的 ID 一�
 export async function checkExpiredXPBoosters(client) {
     const now = Date.now();
 
-    // 🔍 取得所有擁有經驗加成且已到期的用戶
     const expiredUsers = await getExpiredXPBoosters(client);
 
     for (const userData of expiredUsers) {
@@ -15,14 +14,12 @@ export async function checkExpiredXPBoosters(client) {
         const guildId = userData.guildId;
 
         try {
-            // 取得伺服器與成員
             const guild = client.guilds.cache.get(guildId);
             if (!guild) continue;
 
             const member = await guild.members.fetch(userId).catch(() => null);
             if (!member) continue;
 
-            // 確認身分組仍存在且成員擁有
             if (member.roles.cache.has(XP_BOOSTER_ROLE_ID)) {
                 await member.roles.remove(XP_BOOSTER_ROLE_ID);
                 logger.info(`Removed expired XP booster role from user ${userId} in guild ${guildId}`);
@@ -40,7 +37,7 @@ export async function checkExpiredXPBoosters(client) {
     }
 }
 
-// ⚠️ 需要根據你的資料庫結構調整
+// ⚠️ 請根據你的資料庫結構調整此函式
 async function getExpiredXPBoosters(client) {
     // 假設使用 PostgreSQL，且 economy 表有以下欄位：
     // user_id, guild_id, xp_booster_expires_at
