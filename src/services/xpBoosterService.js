@@ -1,56 +1,63 @@
+// src/services/xpBoosterService.js
 import { logger } from '../utils/logger.js';
 import { getEconomyData, setEconomyData } from '../utils/economy.js';
 
-const XP_BOOSTER_ROLE_ID = '1540410469406220358';
-const CHECK_INTERVAL = 10 * 60 * 1000; // ⏱️ 改為每 10 分鐘檢查一次
+const XP_BOOSTER_ROLE_ID = '1540410469406220358'; // 與 crate.js 中的 ID 一致
 
-export function initXpBoosterService(client) {
-    // 機器人啟動後立即執行一次檢查
-    checkExpiredBoosters(client);
+export async function checkExpiredXPBoosters(client) {
+    const now = Date.now();
 
-    // 設定定時背景掃描（每 10 分鐘）
-    setInterval(() => {
-        checkExpiredBoosters(client);
-    }, CHECK_INTERVAL);
+    // 🔍 取得所有擁有經驗加成且已到期的用戶
+    const expiredUsers = await getExpiredXPBoosters(client);
 
-    logger.info('[XP_BOOSTER_SERVICE] Background booster expiration service initialized (Interval: 10 mins).');
+    for (const userData of expiredUsers) {
+        const userId = userData.userId;
+        const guildId = userData.guildId;
+
+        try {
+            // 取得伺服器與成員
+            const guild = client.guilds.cache.get(guildId);
+            if (!guild) continue;
+
+            const member = await guild.members.fetch(userId).catch(() => null);
+            if (!member) continue;
+
+            // 確認身分組仍存在且成員擁有
+            if (member.roles.cache.has(XP_BOOSTER_ROLE_ID)) {
+                await member.roles.remove(XP_BOOSTER_ROLE_ID);
+                logger.info(`Removed expired XP booster role from user ${userId} in guild ${guildId}`);
+            }
+
+            // 清除到期時間
+            const freshData = await getEconomyData(client, guildId, userId);
+            if (freshData) {
+                freshData.xpBoosterExpiresAt = null;
+                await setEconomyData(client, guildId, userId, freshData);
+            }
+        } catch (err) {
+            logger.warn(`Failed to remove expired XP booster for ${userId}: ${err.message}`);
+        }
+    }
 }
 
-async function checkExpiredBoosters(client) {
+// ⚠️ 需要根據你的資料庫結構調整
+async function getExpiredXPBoosters(client) {
+    // 假設使用 PostgreSQL，且 economy 表有以下欄位：
+    // user_id, guild_id, xp_booster_expires_at
+    const query = `
+        SELECT 
+            user_id AS "userId",
+            guild_id AS "guildId"
+        FROM economy
+        WHERE xp_booster_expires_at IS NOT NULL
+          AND xp_booster_expires_at <= $1
+    `;
+
     try {
-        // 遍歷機器人所在的每個伺服器
-        for (const [guildId, guild] of client.guilds.cache) {
-            try {
-                // 確保伺服器成員有被載入（如果快取為空，先抓取一次成員）
-                const members = await guild.members.fetch().catch(() => guild.members.cache);
-
-                for (const [userId, member] of members) {
-                    // 如果該成員已經擁有這個經驗加成身分組
-                    if (member.roles.cache.has(XP_BOOSTER_ROLE_ID)) {
-                        // 讀取該名玩家的經濟資料（內含過期時間）
-                        const userData = await getEconomyData(client, guildId, userId);
-
-                        // 檢查是否有設定過期時間，且當前時間已經超過（或等於）過期時間
-                        if (userData && userData.xpBoosterExpiresAt && Date.now() >= userData.xpBoosterExpiresAt) {
-                            try {
-                                // 拔除身分組
-                                await member.roles.remove(XP_BOOSTER_ROLE_ID, 'XP Booster card expired (checked by 10-min background service)');
-                                logger.info(`[XP_BOOSTER] Successfully removed expired role from user ${userId} in guild ${guildId}`);
-
-                                // 清除資料庫中的過期時間標記，並儲存
-                                delete userData.xpBoosterExpiresAt;
-                                await setEconomyData(client, guildId, userId, userData);
-                            } catch (roleErr) {
-                                logger.error(`[XP_BOOSTER] Failed to remove role for user ${userId}: ${roleErr.message}`);
-                            }
-                        }
-                    }
-                }
-            } catch (guildErr) {
-                logger.error(`[XP_BOOSTER_SERVICE] Error processing guild ${guildId}: ${guildErr.message}`);
-            }
-        }
-    } catch (err) {
-        logger.error(`[XP_BOOSTER_SERVICE] Error during background check: ${err.message}`);
+        const result = await client.db.pool.query(query, [Date.now()]);
+        return result.rows;
+    } catch (error) {
+        logger.error('Failed to fetch expired XP boosters:', error);
+        return [];
     }
 }
