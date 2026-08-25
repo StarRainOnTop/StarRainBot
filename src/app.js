@@ -14,7 +14,8 @@ import { loadCommands, registerCommands as registerSlashCommands } from './handl
 import { runSafeTask, handleTaskError, ErrorCodes } from './utils/errorHandler.js';
 import { initializeMusic } from './services/music/riffySetup.js';
 import { shutdownMusic } from './services/music/playerHandler.js';
-import { checkDailyReminders } from './services/dailyReminderService.js'; // ⏰ 新增
+import { checkDailyReminders } from './services/dailyReminderService.js'; // 每日提醒
+import { checkExpiredXPBoosters } from './services/xpBoosterService.js'; // ⏰ XP 加成自動移除
 import pkg from '../package.json' with { type: 'json' };
 import { EXPECTED_SCHEMA_VERSION, EXPECTED_SCHEMA_LABEL } from './config/database/schemaVersion.js';
 
@@ -264,8 +265,11 @@ class TitanBot extends Client {
     // 每分鐘檢查抽獎
     cron.schedule('* * * * *', runSafeTask('giveaway_check', () => checkGiveaways(this)));
 
-    // ⏰ 每分鐘檢查每日獎勵提醒（新增）
+    // ⏰ 每分鐘檢查每日獎勵提醒
     cron.schedule('* * * * *', runSafeTask('daily_reminder_check', () => checkDailyReminders(this)));
+
+    // ⏰ 每分鐘檢查 XP 加成到期
+    cron.schedule('* * * * *', runSafeTask('xp_booster_check', () => checkExpiredXPBoosters(this)));
   }
 
   async loadHandlers() {
