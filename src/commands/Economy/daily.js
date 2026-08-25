@@ -109,6 +109,7 @@ export default {
         userData.lastDaily = now;
         userData.dailyStreak = currentStreak;
         userData.reminderSent = false;
+        userData.nextReminderAt = now + DAILY_COOLDOWN; // ⏰ 設定下次提醒時間（24小時後）
 
         await setEconomyData(client, guildId, userId, userData);
         const claimTimestamp = now;
@@ -148,39 +149,7 @@ export default {
 
         await InteractionHelper.safeEditReply(interaction, { embeds: [embed] });
 
-        // ⏰ 24 小時後觸發提醒（超過 48 小時沒互動即斷簽，不發送私訊）
-        setTimeout(async () => {
-            try {
-                const latestData = await getEconomyData(client, guildId, userId);
-                
-                if (!latestData || latestData.lastDaily !== claimTimestamp) {
-                    return; // 已經領過或重置過，不發私訊
-                }
-
-                const currentTime = Date.now();
-                if (currentTime > claimTimestamp + ALLOWED_WINDOW) {
-                    return; // 超過時間未領（已斷簽），不發送私訊打擾
-                }
-
-                if (latestData.reminderSent) {
-                    return;
-                }
-
-                latestData.reminderSent = true;
-                await setEconomyData(client, guildId, userId, latestData);
-
-                const user = await client.users.fetch(userId);
-                if (user) {
-                    const dmEmbed = createEmbed({
-                        title: "⏰ 每日獎勵已刷新！",
-                        description: `你的每日獎勵已經可以領取囉！快來伺服器使用 \`/daily\` 指令領取你的現金，保持連續簽到紀錄吧！\n\n*掌握最新影片資訊、交流床戰戰術、尋找優質組隊隊友，快加入我們的伺服器吧！*`
-                    });
-                    await user.send({ embeds: [dmEmbed] });
-                }
-            } catch (err) {
-                logger.warn(`Could not send daily reminder DM to user ${userId}: ${err.message}`);
-            }
-        }, DAILY_COOLDOWN);
+        // 注意：已移除 setTimeout，改由 dailyReminderService 每分鐘檢查提醒
 
     }, { command: 'daily' })
 };
