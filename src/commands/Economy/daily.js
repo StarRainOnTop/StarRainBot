@@ -62,8 +62,8 @@ export default {
             currentStreak = 1; // 超過時間斷簽，重置回 1，金額回歸 $100
         }
 
-        // 1. 常規每 2 天 +$50 獎勵
-        const streakBonus = Math.floor((currentStreak - 1) / 2) * 50;
+        // 1. 常規每 2 天 +$50 獎勵（修正公式：day2 +50, day4 +100 ...）
+        const streakBonus = Math.floor(currentStreak / 2) * 50;
 
         // 2. 每 7 天里程碑動態加碼獎勵 (7天+$100, 14天+$200, 21天+$300...)
         let milestoneBonus = 0;
