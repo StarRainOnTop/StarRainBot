@@ -186,7 +186,7 @@ export const shopItems = [
     {
         id: 'personal_safe',
         name: '🔒 個人保險箱',
-        price: 30000,
+        price: 15000,
         description: '保護你的金錢免遭竊取。可防禦 5 次搶劫，用完需重新購買。',
         type: 'tool',
         durability: 5,
