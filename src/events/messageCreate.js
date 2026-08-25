@@ -116,7 +116,9 @@ async function handlePrefixCommand(message, client) {
       return; 
     }
 
-    if (isMaintenanceMode() && !isBotOwner(message.author.id)) {
+    // [修改處] 如果想讓所有人都能用，這裡可以把維護模式的檢查移除，
+    // 或者改成只要開啟維護模式就全面禁止（拿掉 !isBotOwner 檢查）
+    if (isMaintenanceMode()) {
       await message.channel.send({
         embeds: [createEmbed({
           title: 'Maintenance Mode',
