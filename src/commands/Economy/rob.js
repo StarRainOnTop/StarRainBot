@@ -7,9 +7,9 @@ import { BotConfig } from '../../config/bot.js';
 
 const ROB_COOLDOWN = BotConfig.economy?.cooldowns?.rob ?? 2 * 60 * 60 * 1000;
 const BASE_ROB_SUCCESS_CHANCE = BotConfig.economy?.robSuccessRate ?? 0.4;
-const ROB_WALLET_PERCENTAGE = 0.15; // 搶奪身上現金的 15%
-const ROB_BANK_PERCENTAGE = 0.05;   // 額外搶奪銀行存款的 5%
-const FINE_PERCENTAGE = 0.1;        // 失敗罰款總資產的 10%
+const ROB_WALLET_PERCENTAGE = 0.10; // 搶奪身上現金的 10%
+const ROB_BANK_PERCENTAGE = 0.03;   // 額外搶奪銀行存款的 3%
+const FINE_PERCENTAGE = 0.05;        // 失敗罰款總資產的 5%
 
 export default {
     data: new SlashCommandBuilder()
