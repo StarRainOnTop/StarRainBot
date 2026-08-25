@@ -7,11 +7,19 @@ const XP_BOOSTER_ROLE_ID = '1540410469406220358'; // 與 crate.js 中的 ID 一�
 export async function checkExpiredXPBoosters(client) {
     const now = Date.now();
 
-    const expiredUsers = await getExpiredXPBoosters(client);
+    const allEconomyKeys = await getAllEconomyKeys(client);
 
-    for (const userData of expiredUsers) {
-        const userId = userData.userId;
-        const guildId = userData.guildId;
+    for (const key of allEconomyKeys) {
+        const { guildId, userId } = parseEconomyKey(key);
+        if (!guildId || !userId) continue;
+
+        const userData = await getEconomyData(client, guildId, userId);
+        if (!userData) continue;
+
+        // 確認已到期
+        if (!userData.xpBoosterExpiresAt || now < userData.xpBoosterExpiresAt) {
+            continue;
+        }
 
         try {
             const guild = client.guilds.cache.get(guildId);
@@ -26,35 +34,39 @@ export async function checkExpiredXPBoosters(client) {
             }
 
             // 清除到期時間
-            const freshData = await getEconomyData(client, guildId, userId);
-            if (freshData) {
-                freshData.xpBoosterExpiresAt = null;
-                await setEconomyData(client, guildId, userId, freshData);
-            }
+            userData.xpBoosterExpiresAt = null;
+            await setEconomyData(client, guildId, userId, userData);
         } catch (err) {
             logger.warn(`Failed to remove expired XP booster for ${userId}: ${err.message}`);
         }
     }
 }
 
-// ⚠️ 請根據你的資料庫結構調整此函式
-async function getExpiredXPBoosters(client) {
-    // 假設使用 PostgreSQL，且 economy 表有以下欄位：
-    // user_id, guild_id, xp_booster_expires_at
-    const query = `
-        SELECT 
-            user_id AS "userId",
-            guild_id AS "guildId"
-        FROM economy
-        WHERE xp_booster_expires_at IS NOT NULL
-          AND xp_booster_expires_at <= $1
-    `;
-
+async function getAllEconomyKeys(client) {
     try {
-        const result = await client.db.pool.query(query, [Date.now()]);
-        return result.rows;
+        if (!client.db || typeof client.db.list !== 'function') {
+            return [];
+        }
+
+        const allKeys = await client.db.list('guild:');
+        if (!Array.isArray(allKeys)) {
+            return [];
+        }
+
+        return allKeys.filter(key => key.includes(':economy:'));
     } catch (error) {
-        logger.error('Failed to fetch expired XP boosters:', error);
+        logger.error('Failed to list economy keys:', error);
         return [];
     }
+}
+
+function parseEconomyKey(key) {
+    const parts = key.split(':');
+    if (parts.length >= 4 && parts[0] === 'guild' && parts[2] === 'economy') {
+        return {
+            guildId: parts[1],
+            userId: parts[3]
+        };
+    }
+    return { guildId: null, userId: null };
 }
