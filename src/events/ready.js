@@ -31,10 +31,9 @@ export default {
       startupLog(`Ready! Logged in as ${client.user.tag}`);
       startupLog(`Serving ${client.guilds.cache.size} guild(s)`);
 
-      // 🚀 註冊指令
+      // 🚀 註冊指令（已移除 guildId，全面改為全域註冊）
       await registerCommands(client, { 
-        clientId: client.user.id, 
-        guildId: "783858618386219059" 
+        clientId: client.user.id 
       });
 
       startupLog(`Loaded ${client.commands.size} commands`);
