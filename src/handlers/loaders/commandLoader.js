@@ -248,7 +248,6 @@ async function registerCommandsTarget(client, clientId, guildId, commands, total
         if (guildId) {
             logger.info(`Preparing to register ${commandsToRegister.length} guild commands for server: ${guildId}`);
             
-            // 直接更新指令，避免頻繁清空觸發 Discord API 限流而卡死
             await client.rest.put(`/applications/${clientId}/guilds/${guildId}/commands`, { body: commandsToRegister });
             logger.info(`Successfully registered ${commandsToRegister.length} guild commands for server ${guildId}`);
         } else {
@@ -269,7 +268,8 @@ async function registerCommandsTarget(client, clientId, guildId, commands, total
 }
 
 export async function registerCommands(client, options = {}) {
-    const { clientId = null, guildId = process.env.GUILD_ID || null } = options;
+    // 強制將 guildId 設定為 null，確保一定會註冊為全域指令
+    const { clientId = null, guildId = null } = options;
 
     try {
         const { commands, totalSubcommands } = collectCommandPayloads(client);
