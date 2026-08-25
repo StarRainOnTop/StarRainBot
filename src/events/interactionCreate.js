@@ -18,7 +18,7 @@ import { isCommandEnabled } from '../services/commandAccessService.js';
 import { resolveSlashAccessKey } from '../utils/messageAdapter.js';
 import { isCollectorManagedComponent } from '../utils/collectorComponents.js';
 import { ResponseCoordinator } from '../utils/responseCoordinator.js';
-import { enforceDefaultCommandPermissions } from '../utils/permissionGuard.js';
+// 已經不需要 enforceDefaultCommandPermissions，可以移除引入或保留不影響
 
 const COMMAND_ERROR_SUBTYPES = {
   warn: 'warn_failed',
@@ -152,13 +152,7 @@ export default {
               }
             }
 
-            const permissionAllowed = await enforceDefaultCommandPermissions(interaction, command, {
-              source: 'interactionCreate',
-              guildConfig,
-            });
-            if (!permissionAllowed) {
-              return;
-            }
+            // [已移除] 原本的 enforceDefaultCommandPermissions 檢查，現在所有人都可以直接執行指令
 
             await command.execute(interaction, guildConfig, client);
           } catch (error) {
@@ -417,7 +411,6 @@ export default {
 
           if (!modal) {
             if (!interaction.customId.includes(':')) {
-
               return;
             }
 
