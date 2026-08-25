@@ -8,7 +8,7 @@ import { supportsPrefixExecution, executePrefixCommand, resolvePrefixAccessKey }
 import { resolveCommandAlias, resolveSubcommandAlias } from '../config/commands/commandAliases.js';
 import { getPrefixRestriction } from '../config/commands/prefixRestrictions.js';
 import { getGuildConfig } from '../services/config/guildConfig.js';
-import { getCommandPrefix, getBotMessage, isBotOwner, isCommandCategoryEnabled, isMaintenanceMode } from '../config/bot.js';
+import { getCommandPrefix, getBotMessage, isCommandCategoryEnabled } from '../config/bot.js'; // 移除了用不到的 isBotOwner 和 isMaintenanceMode
 import { enforceAbuseProtection, formatCooldownDuration } from '../utils/abuseProtection.js';
 import { createEmbed } from '../utils/embeds.js';
 import { isCommandEnabled } from '../services/commandAccessService.js';
@@ -32,7 +32,7 @@ export default {
       // ⚡ 1. 處理私訊 (DM) 轉發邏輯
       if (!message.guild) {
         await handleDirectMessage(message, client);
-        return; // 結束執行，不讓私訊去跑後面的伺服器遊戲或指令
+        return; 
       }
 
       logger.debug(`Message received from ${message.author.tag}: ${message.content}`);
@@ -116,18 +116,7 @@ async function handlePrefixCommand(message, client) {
       return; 
     }
 
-    // [修改處] 如果想讓所有人都能用，這裡可以把維護模式的檢查移除，
-    // 或者改成只要開啟維護模式就全面禁止（拿掉 !isBotOwner 檢查）
-    if (isMaintenanceMode()) {
-      await message.channel.send({
-        embeds: [createEmbed({
-          title: 'Maintenance Mode',
-          description: getBotMessage('maintenanceMode'),
-          color: 'warning',
-        })],
-      }).catch(() => {});
-      return;
-    }
+    // 這裡已完全移除維護模式的阻擋檢查
 
     if (!isCommandCategoryEnabled(command.category)) {
       await message.channel.send({
