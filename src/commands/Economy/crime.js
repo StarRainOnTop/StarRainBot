@@ -18,6 +18,10 @@ const LEVEL_REWARD_MULTIPLIER = 0.02;         // 每級提升獎勵 2%
 const MAX_RISK_REDUCTION = 0.30;              // 最多降低 30% 失敗率
 const MAX_REWARD_MULTIPLIER = 2.0;            // 獎勵最高 2 倍
 
+// ─── 道具效果常數 ───
+const MASK_FINE_REDUCTION = 0.5;              // 面具罰款減半
+const LOCKPICK_RISK_REDUCTION = 0.15;         // 萬能鑰匙降低失敗率 15%
+
 // 計算升級所需經驗
 function getXpForNextLevel(level) {
     return level * 100 + 100; // 每級需求遞增
@@ -47,11 +51,9 @@ function getRiskMultiplier(totalWealth) {
 }
 
 // ─── 隨機事件系統 ───
-// 事件機率（成功與失敗分開）
 const SUCCESS_EVENT_CHANCE = 0.25;
 const FAILURE_EVENT_CHANCE = 0.30;
 
-// 成功時可能觸發的事件
 const SUCCESS_EVENTS = [
     {
         name: "意外之財",
@@ -75,7 +77,6 @@ const SUCCESS_EVENTS = [
     }
 ];
 
-// 失敗時可能觸發的事件
 const FAILURE_EVENTS = [
     {
         name: "同夥背叛",
@@ -99,7 +100,6 @@ const FAILURE_EVENTS = [
     }
 ];
 
-// 取得隨機事件
 function getRandomEvent(isSuccess) {
     const eventList = isSuccess ? SUCCESS_EVENTS : FAILURE_EVENTS;
     const chance = isSuccess ? SUCCESS_EVENT_CHANCE : FAILURE_EVENT_CHANCE;
@@ -180,24 +180,37 @@ export default {
         const crimeLevel = userData.crimeLevel || 0;
         const crimeXp = userData.crimeXp || 0;
 
-        // 添加經驗
         userData.crimeXp = crimeXp + XP_PER_ATTEMPT;
 
-        // 升級檢查
         while (userData.crimeXp >= getXpForNextLevel(crimeLevel)) {
             userData.crimeXp -= getXpForNextLevel(crimeLevel);
             userData.crimeLevel = (userData.crimeLevel || 0) + 1;
         }
         const newLevel = userData.crimeLevel || 0;
 
-        // 熟練度效果
         const riskReduction = Math.min(crimeLevel * LEVEL_RISK_REDUCTION, MAX_RISK_REDUCTION);
         const rewardMultiplier = Math.min(1 + (crimeLevel * LEVEL_REWARD_MULTIPLIER), MAX_REWARD_MULTIPLIER);
 
         // ─── 總資產與動態風險 ───
         const totalWealth = (userData.wallet || 0) + (userData.bank || 0);
         const riskMultiplier = getRiskMultiplier(totalWealth);
-        const adjustedRisk = Math.max(0.05, (crime.risk * riskMultiplier) - riskReduction);
+        let adjustedRisk = Math.max(0.05, (crime.risk * riskMultiplier) - riskReduction);
+
+        // ─── 道具使用 ───
+        const inventory = userData.inventory || {};
+        let usedLockpick = false;
+        let usedMask = false;
+
+        if ((inventory.lockpick || 0) > 0) {
+            usedLockpick = true;
+            inventory.lockpick -= 1;
+            adjustedRisk = Math.max(0.05, adjustedRisk - LOCKPICK_RISK_REDUCTION);
+        }
+
+        if ((inventory.disguise_mask || 0) > 0) {
+            usedMask = true;
+            inventory.disguise_mask -= 1;
+        }
 
         // 判定成功與否
         const isSuccess = Math.random() > adjustedRisk;
@@ -213,7 +226,6 @@ export default {
         // ─── 隨機事件 ───
         const event = getRandomEvent(isSuccess);
         let eventMessage = '';
-        let eventApplied = false;
         let cashBonus = 0;
         let fineMultiplier = 1;
         let jailTimeModifier = 1;
@@ -221,10 +233,8 @@ export default {
         let xpMultiplier = 1;
 
         if (event) {
-            eventApplied = true;
             eventMessage = `\n\n🎲 **隨機事件：${event.name}**\n${event.description} ${event.effect.message}`;
 
-            // 套用事件效果
             if (isSuccess) {
                 if (event.effect.cashBonus) {
                     cashBonus = event.effect.cashBonus;
@@ -245,7 +255,7 @@ export default {
                     jailTimeModifier = 1 + event.effect.jailExtension;
                 }
                 if (event.effect.jailRemoved) {
-                    jailTimeModifier = 0; // 不用坐牢
+                    jailTimeModifier = 0;
                 }
             }
         }
@@ -260,6 +270,9 @@ export default {
         if (isSuccess) {
             userData.wallet = (userData.wallet || 0) + amountEarned;
 
+            // 存回 inventory
+            userData.inventory = inventory;
+
             await setEconomyData(client, guildId, userId, userData);
 
             const embed = successEmbed(
@@ -273,12 +286,25 @@ export default {
                 { name: '冷卻時間', value: `${finalCooldown / 60000} 分鐘`, inline: true }
             );
 
+            if (usedLockpick || usedMask) {
+                embed.addFields({
+                    name: '🛠️ 使用道具',
+                    value: `${usedLockpick ? '🔧 萬能鑰匙' : ''}${usedLockpick && usedMask ? '、' : ''}${usedMask ? '🕶️ 面具' : ''}`,
+                    inline: false
+                });
+            }
+
             await InteractionHelper.safeEditReply(interaction, { embeds: [embed] });
         } else {
-            // 失敗：罰款計算
+            // ─── 失敗：罰款計算 ───
             const potentialHaul = Math.floor((crime.min + crime.max) / 2);
             let fine = Math.min(Math.floor(potentialHaul * FINE_RATE), MAX_FINE);
             fine = Math.floor(fine * fineMultiplier);
+
+            // 面具效果：罰款減半
+            if (usedMask) {
+                fine = Math.floor(fine * MASK_FINE_REDUCTION);
+            }
 
             const totalMoney = (userData.wallet || 0) + (userData.bank || 0);
             const actualFinePaid = Math.min(fine, totalMoney);
@@ -296,9 +322,11 @@ export default {
             if (jailTime > 0) {
                 userData.jailedUntil = now + jailTime;
             } else {
-                // 若事件完全免除坐牢，則清除 jailedUntil
                 userData.jailedUntil = 0;
             }
+
+            // 存回 inventory
+            userData.inventory = inventory;
 
             await setEconomyData(client, guildId, userId, userData);
 
@@ -315,6 +343,14 @@ export default {
                 { name: '犯罪等級', value: `Lv.${newLevel}`, inline: true },
                 { name: '冷卻時間', value: `${finalCooldown / 60000} 分鐘`, inline: true }
             );
+
+            if (usedLockpick || usedMask) {
+                embed.addFields({
+                    name: '🛠️ 使用道具',
+                    value: `${usedLockpick ? '🔧 萬能鑰匙' : ''}${usedLockpick && usedMask ? '、' : ''}${usedMask ? '🕶️ 面具' : ''}`,
+                    inline: false
+                });
+            }
 
             await InteractionHelper.safeEditReply(interaction, { embeds: [embed] });
         }
