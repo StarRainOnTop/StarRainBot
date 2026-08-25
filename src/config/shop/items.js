@@ -160,6 +160,30 @@ export const shopItems = [
     }
 },
     {
+    id: 'beg_hat',
+    name: '🎩 破舊帽子',
+    price: 150,
+    description: '提高乞討成功率。每次乞討消耗 1 個。',
+    type: 'consumable',
+    maxQuantity: 5,
+    effect: {
+        type: 'beg_success_boost',
+        boost: 0.10  // 成功率 +10%
+    }
+},
+{
+    id: 'beg_sign',
+    name: '🪧 創意標語板',
+    price: 150,
+    description: '增加乞討成功時獲得的金額。每次乞討消耗 1 個。',
+    type: 'consumable',
+    maxQuantity: 5,
+    effect: {
+        type: 'beg_amount_boost',
+        multiplier: 1.5  // 金額 x1.5
+    }
+},
+    {
         id: 'personal_safe',
         name: '🔒 個人保險箱',
         price: 30000,
