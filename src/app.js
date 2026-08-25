@@ -14,8 +14,8 @@ import { loadCommands, registerCommands as registerSlashCommands } from './handl
 import { runSafeTask, handleTaskError, ErrorCodes } from './utils/errorHandler.js';
 import { initializeMusic } from './services/music/riffySetup.js';
 import { shutdownMusic } from './services/music/playerHandler.js';
-import { checkDailyReminders } from './services/dailyReminderService.js'; // 每日提醒
-import { checkExpiredXPBoosters } from './services/xpBoosterService.js'; // ⏰ XP 加成自動移除
+import { checkDailyReminders } from './services/dailyReminderService.js';
+import { checkExpiredXPBoosters } from './services/xpBoosterService.js';
 import pkg from '../package.json' with { type: 'json' };
 import { EXPECTED_SCHEMA_VERSION, EXPECTED_SCHEMA_LABEL } from './config/database/schemaVersion.js';
 
@@ -23,14 +23,14 @@ class TitanBot extends Client {
   constructor() {
     super({
       intents: [
-        GatewayIntentBits.Guilds,                        
-        GatewayIntentBits.GuildMembers,                        
-        GatewayIntentBits.GuildMessages,                         
-        GatewayIntentBits.GuildMessageReactions,         
-        GatewayIntentBits.MessageContent,                      
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.GuildMessageReactions,
+        GatewayIntentBits.MessageContent,
         GatewayIntentBits.DirectMessages,
-        GatewayIntentBits.GuildVoiceStates,                      
-        GatewayIntentBits.GuildBans,                             
+        GatewayIntentBits.GuildVoiceStates,
+        GatewayIntentBits.GuildBans,
       ],
     });
 
@@ -306,9 +306,28 @@ class TitanBot extends Client {
 
   async registerCommands() {
     try {
+      const clientId = this.config.bot.clientId;
+      const guildId = process.env.GUILD_ID || this.config.bot.guildId;
+
+      // 先取得目前伺服器上所有斜線命令
+      const existingCommands = await this.rest.get(
+        `/applications/${clientId}/guilds/${guildId}/commands`
+      );
+
+      // 刪除名稱為 withdraw 的舊命令（選項類型已從整數改為字串）
+      for (const cmd of existingCommands) {
+        if (cmd.name === 'withdraw') {
+          await this.rest.delete(
+            `/applications/${clientId}/guilds/${guildId}/commands/${cmd.id}`
+          );
+          console.log(`已刪除舊的 withdraw 命令：${cmd.id}`);
+        }
+      }
+
+      // 重新註冊所有命令（包括新的 withdraw）
       await registerSlashCommands(this, { 
-        clientId: this.config.bot.clientId,
-        guildId: process.env.GUILD_ID || this.config.bot.guildId
+        clientId,
+        guildId
       });
     } catch (error) {
       logger.error('Error registering commands:', error);
