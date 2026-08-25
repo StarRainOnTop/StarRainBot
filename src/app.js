@@ -14,6 +14,7 @@ import { loadCommands, registerCommands as registerSlashCommands } from './handl
 import { runSafeTask, handleTaskError, ErrorCodes } from './utils/errorHandler.js';
 import { initializeMusic } from './services/music/riffySetup.js';
 import { shutdownMusic } from './services/music/playerHandler.js';
+import { checkDailyReminders } from './services/dailyReminderService.js'; // ⏰ 新增
 import pkg from '../package.json' with { type: 'json' };
 import { EXPECTED_SCHEMA_VERSION, EXPECTED_SCHEMA_LABEL } from './config/database/schemaVersion.js';
 
@@ -52,7 +53,6 @@ class TitanBot extends Client {
       const dbInstance = await initializeDatabase();
       this.db = dbInstance.db;
 
-      // Check database status and report
       const dbStatus = this.db.getStatus();
       if (dbStatus.isDegraded) {
         logger.warn('');
@@ -79,7 +79,6 @@ class TitanBot extends Client {
       await this.loadHandlers();
       startupLog('Handlers loaded');
 
-      // 💡 改成非同步背景初始化音樂，避免 Lavalink 節點連線卡死主執行緒
       (async () => {
         try {
           startupLog('Initializing music nodes in background...');
@@ -91,21 +90,15 @@ class TitanBot extends Client {
       
       startupLog('Logging into Discord...');
       
-      // ⬇️ 這裡加入了 Debug 測試碼 ⬇️
-      // 1. 檢查 Token 是否真的有從 config 被讀取進來
       console.log(`[DEBUG] Token 狀態: ${this.config.bot.token ? "✅ 已讀取 (長度: " + this.config.bot.token.length + ")" : "❌ 空的！請檢查環境變數"}`);
-
-      // 2. 開啟 Discord.js 的底層偵錯模式，把 Gateway 連線過程全部印出來
       this.on('debug', (info) => console.log(`[DISCORD DEBUG] ${info}`));
 
-      // 3. 特別捕捉 login 過程中的錯誤
       try {
         await this.login(this.config.bot.token);
         startupLog('Discord login successful');
       } catch (loginError) {
         logger.error('❌ 機器人登入失敗 (詳細錯誤):', loginError);
       }
-      // ⬆️ Debug 測試碼結束 ⬆️
       
       startupLog('Registering slash commands for target guild...');
       await this.registerCommands();
@@ -265,8 +258,14 @@ class TitanBot extends Client {
   }
 
   setupCronJobs() {
+    // 每天 06:00 檢查生日
     cron.schedule('0 6 * * *', runSafeTask('birthday_check', () => checkBirthdays(this)));
+
+    // 每分鐘檢查抽獎
     cron.schedule('* * * * *', runSafeTask('giveaway_check', () => checkGiveaways(this)));
+
+    // ⏰ 每分鐘檢查每日獎勵提醒（新增）
+    cron.schedule('* * * * *', runSafeTask('daily_reminder_check', () => checkDailyReminders(this)));
   }
 
   async loadHandlers() {
