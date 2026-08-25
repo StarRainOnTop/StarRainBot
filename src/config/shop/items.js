@@ -136,6 +136,30 @@ export const shopItems = [
         }
     },
     {
+    id: 'disguise_mask',
+    name: '🕶️ 面具',
+    price: 3000,
+    description: '降低犯罪失敗時的罰款金額。使用次數上限 5 次，每次犯罪消耗 1 個。',
+    type: 'consumable',
+    maxQuantity: 5,
+    effect: {
+        type: 'crime_fine_reduction',
+        reduction: 0.5  // 罰款減半
+    }
+},
+{
+    id: 'lockpick',
+    name: '🔧 萬能鑰匙',
+    price: 5000,
+    description: '提高犯罪成功率。使用次數上限 5 次，每次犯罪消耗 1 個。',
+    type: 'consumable',
+    maxQuantity: 5,
+    effect: {
+        type: 'crime_success_boost',
+        boost: 0.15  // 失敗率降低 15%
+    }
+},
+    {
         id: 'personal_safe',
         name: '🔒 個人保險箱',
         price: 30000,
