@@ -7,7 +7,8 @@ import { InteractionHelper } from '../../utils/interactionHelper.js';
 const FISH_COOLDOWN = 35 * 60 * 1000; 
 const BASE_MIN_REWARD = 300;
 const BASE_MAX_REWARD = 900;
-const FISHING_ROD_MULTIPLIER = 1.5;
+const FISHING_ROD_MULTIPLIER = 1.5;          // 普通釣竿
+const DIAMOND_FISHING_ROD_MULTIPLIER = 2.0; // 鑽石釣魚竿（+100%）
 
 // 🟢 請在這裡填入你伺服器「解鎖全部圖鑑」的特殊身分組 ID
 const SPECIAL_ROLE_ID = '1540051763053338684'; 
@@ -57,6 +58,7 @@ export default {
         const userData = await getEconomyData(client, guildId, userId);
         const lastFish = userData.lastFish || 0;
         const hasFishingRod = userData.inventory?.["fishing_rod"] || 0;
+        const hasDiamondFishingRod = userData.inventory?.["diamond_fishing_rod"] || 0;
 
         if (now < lastFish + FISH_COOLDOWN) {
             const remaining = lastFish + FISH_COOLDOWN - now;
@@ -100,7 +102,11 @@ export default {
         let finalEarned = baseEarned;
         let multiplierMessage = "";
 
-        if (hasFishingRod > 0) {
+        // 優先使用鑽石釣魚竿，否則使用普通釣竿
+        if (hasDiamondFishingRod > 0) {
+            finalEarned = Math.floor(baseEarned * DIAMOND_FISHING_ROD_MULTIPLIER);
+            multiplierMessage = `\n💎 **鑽石釣竿加成：+100%**`;
+        } else if (hasFishingRod > 0) {
             finalEarned = Math.floor(baseEarned * FISHING_ROD_MULTIPLIER);
             multiplierMessage = `\n🎣 **釣竿加成：+50%**`;
         }
