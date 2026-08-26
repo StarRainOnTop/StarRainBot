@@ -101,7 +101,7 @@ class TitanBot extends Client {
         logger.error('❌ 機器人登入失敗 (詳細錯誤):', loginError);
       }
       
-      startupLog('Registering slash commands for target guild...');
+      startupLog('Registering slash commands...');
       await this.registerCommands();
       startupLog('Slash commands registration complete');
       
@@ -304,33 +304,45 @@ class TitanBot extends Client {
     }
   }
 
+  // ✅ MODIFIED registerCommands method
   async registerCommands() {
     try {
       const clientId = this.config.bot.clientId;
       const guildId = process.env.GUILD_ID || this.config.bot.guildId;
 
-      // 先取得目前伺服器上所有斜線命令
-      const existingCommands = await this.rest.get(
-        `/applications/${clientId}/guilds/${guildId}/commands`
-      );
-
-      // 刪除名稱為 withdraw 的舊命令（選項類型已從整數改為字串）
-      for (const cmd of existingCommands) {
-        if (cmd.name === 'withdraw') {
-          await this.rest.delete(
-            `/applications/${clientId}/guilds/${guildId}/commands/${cmd.id}`
-          );
-          console.log(`已刪除舊的 withdraw 命令：${cmd.id}`);
-        }
+      if (!clientId) {
+        logger.error('❌ CLIENT_ID 未設置，無法註冊斜線命令。');
+        return;
       }
 
-      // 重新註冊所有命令（包括新的 withdraw）
-      await registerSlashCommands(this, { 
+      // 判斷使用伺服器命令還是全域命令
+      const isGuild = Boolean(guildId);
+      const baseUrl = isGuild
+        ? `/applications/${clientId}/guilds/${guildId}/commands`
+        : `/applications/${clientId}/commands`;
+
+      logger.info(`🗑️ 正在清除${isGuild ? '伺服器' : '全域'}的所有舊命令...`);
+
+      // 1. 取得目前所有已存在的命令
+      const existingCommands = await this.rest.get(baseUrl);
+
+      // 2. 刪除所有舊命令
+      for (const cmd of existingCommands) {
+        await this.rest.delete(`${baseUrl}/${cmd.id}`);
+        console.log(`已刪除舊命令：${cmd.name} (${cmd.id})`);
+      }
+
+      logger.info('✅ 舊命令已全部清除，開始註冊新命令...');
+
+      // 3. 重新註冊所有命令（包括新的 withdraw）
+      await registerSlashCommands(this, {
         clientId,
-        guildId
+        guildId: isGuild ? guildId : null,
       });
+
+      logger.info('✅ 新命令註冊完成');
     } catch (error) {
-      logger.error('Error registering commands:', error);
+      logger.error('❌ 重置斜線命令失敗:', error);
     }
   }
 
