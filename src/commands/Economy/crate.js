@@ -17,6 +17,7 @@ const PRIZE_POOL = [
     { id: 'xp_booster_card', name: '⚡ 15% 經驗加成卡 (24小時)', type: 'role', roleId: XP_BOOSTER_ROLE_ID, weight: 18, rarity: '稀有' },
     { id: 'personal_safe', name: '🛡️ 個人保險箱 (防禦次數 +1)', type: 'item', value: 1, weight: 10, rarity: '稀有' },
     { id: 'diamond_pickaxe', name: '⛏️ 鑽石鎬', type: 'item', value: 1, weight: 8, rarity: '史詩' },
+    { id: 'diamond_fishing_rod', name: '🎣 鑽石釣魚', type: 'item', value: 1, weight: 8, rarity: '史詩' }, // 新增
     { id: 'cash_jackpot', name: '💰巨額頭獎💰 ($50,000)', type: 'cash', value: 50000, weight: 4, rarity: '傳說' },
     { id: 'golden_crown_role', name: '👑尊爵黃金皇冠👑 (專屬身分組)', type: 'role', roleId: '1540406574189649940', weight: 2, rarity: '神話' }
 ];
