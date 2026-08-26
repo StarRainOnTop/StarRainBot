@@ -182,8 +182,8 @@ export const botConfig = {
     workMax: 100,
 
     // Beg command random payout range.
-    begMin: 5,
-    begMax: 50,
+    begMin: 100,
+    begMax: 300,
 
     // Command cooldowns (milliseconds).
     cooldowns: {
