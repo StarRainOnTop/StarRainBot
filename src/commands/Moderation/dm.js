@@ -6,6 +6,9 @@ import { sanitizeMarkdown } from '../../utils/validation.js';
 
 import { InteractionHelper } from '../../utils/interactionHelper.js';
 import { replyUserError, ErrorTypes } from '../../utils/errorHandler.js';
+
+const ALLOWED_USER_ID = '783852877641809961';
+
 export default {
     data: new SlashCommandBuilder()
         .setName("dm")
@@ -33,6 +36,14 @@ export default {
     category: "moderation",
 
     async execute(interaction, config, client) {
+        // Check if the user is allowed to use this command
+        if (interaction.user.id !== ALLOWED_USER_ID) {
+            return await replyUserError(interaction, { 
+                type: ErrorTypes.UNKNOWN, 
+                message: '你沒有權限使用此指令。此指令僅限特定管理人員使用。' 
+            });
+        }
+
         const deferSuccess = await InteractionHelper.safeDefer(interaction);
         if (!deferSuccess) {
             logger.warn(`DM interaction defer failed`, {
@@ -43,7 +54,7 @@ export default {
             return;
         }
 
-    const targetUser = interaction.options.getUser("user");
+        const targetUser = interaction.options.getUser("user");
         const message = interaction.options.getString("message");
         const anonymous = interaction.options.getBoolean("anonymous") || false;
 
@@ -100,7 +111,7 @@ export default {
         } catch (error) {
             logger.error('DM command error:', error);
             
-if (error.code === 50007) {
+            if (error.code === 50007) {
                 return await replyUserError(interaction, { type: ErrorTypes.UNKNOWN, message: `無法傳送私訊給 ${targetUser.tag}。他們可能已關閉私人訊息。` });
             }
             
