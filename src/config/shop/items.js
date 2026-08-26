@@ -37,7 +37,7 @@ export const shopItems = [
     {
         id: 'diamond_fishing_rod',
         name: '💎 鑽石釣竿',
-        price: 25000,
+        price: 50000,
         description: '增加釣魚收益 +100%。',
         type: 'tool',
         durability: 100,
