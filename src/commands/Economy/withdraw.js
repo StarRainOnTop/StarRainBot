@@ -7,11 +7,11 @@ import { InteractionHelper } from '../../utils/interactionHelper.js';
 export default {
     data: new SlashCommandBuilder()
         .setName('withdraw')
-        .setDescription('從你的銀行提款到錢包')
+        .setDescription('從銀行提取現金到錢包')
         .addStringOption(option =>
             option
                 .setName('amount')
-                .setDescription('提款金額（數字或 "all"）')
+                .setDescription('要提取的金額（輸入數字或 `all` 提取全部）')
                 .setRequired(true)
         ),
 
@@ -20,33 +20,45 @@ export default {
 
         const userId = interaction.user.id;
         const guildId = interaction.guildId;
-        const amountInput = interaction.options.getString("amount").trim().toLowerCase();
+        const amountInput = interaction.options.getString('amount');
 
         const userData = await getEconomyData(client, guildId, userId);
 
         if (!userData) {
             throw createError(
-                "Failed to load economy data",
+                '載入經濟資料失敗',
                 ErrorTypes.DATABASE,
-                "無法載入您的經濟數據，請稍後再試。",
+                '無法載入您的經濟資料，請稍後再試。',
                 { userId, guildId }
             );
         }
 
         let withdrawAmount;
 
-        if (amountInput === 'all') {
+        // 檢查是否為 "all"（不區分大小寫）
+        if (amountInput.toLowerCase() === 'all') {
             withdrawAmount = userData.bank;
         } else {
-            withdrawAmount = parseInt(amountInput, 10);
-            if (isNaN(withdrawAmount) || withdrawAmount <= 0) {
+            // 嘗試解析為整數
+            const parsed = parseInt(amountInput, 10);
+            if (isNaN(parsed) || parsed <= 0) {
                 throw createError(
-                    "Invalid withdrawal amount",
+                    '無效的提取金額',
                     ErrorTypes.VALIDATION,
-                    "你必須輸入大於零的數字或使用 `all` 提領全部。",
+                    '請輸入一個正整數或 `all` 提取全部。',
                     { amount: amountInput, userId }
                 );
             }
+            withdrawAmount = parsed;
+        }
+
+        if (withdrawAmount <= 0) {
+            throw createError(
+                '無效的提取金額',
+                ErrorTypes.VALIDATION,
+                '您必須提取一個正數金額。',
+                { amount: withdrawAmount, userId }
+            );
         }
 
         if (withdrawAmount > userData.bank) {
@@ -55,29 +67,30 @@ export default {
 
         if (withdrawAmount === 0) {
             throw createError(
-                "Empty bank account",
+                '銀行帳戶為空',
                 ErrorTypes.VALIDATION,
-                "你的銀行帳戶是空的。",
+                '您的銀行帳戶中沒有存款。',
                 { userId, bankBalance: userData.bank }
             );
         }
 
         userData.wallet += withdrawAmount;
         userData.bank -= withdrawAmount;
+
         await setEconomyData(client, guildId, userId, userData);
 
         const embed = successEmbed(
-            '提款成功',
-            `你已成功從銀行提領了 **$${withdrawAmount.toLocaleString()}**。`
+            '提取成功',
+            `您成功從銀行提取了 **$${withdrawAmount.toLocaleString()}**。`
         )
             .addFields(
                 {
-                    name: "新現金餘額",
+                    name: '目前現金餘額',
                     value: `$${userData.wallet.toLocaleString()}`,
                     inline: true,
                 },
                 {
-                    name: "新銀行餘額",
+                    name: '目前銀行餘額',
                     value: `$${userData.bank.toLocaleString()}`,
                     inline: true,
                 },
