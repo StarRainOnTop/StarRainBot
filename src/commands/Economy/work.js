@@ -10,7 +10,6 @@ const WORK_COOLDOWN = botConfig.economy?.cooldowns?.work ?? 15 * 60 * 1000;
 const MIN_WORK_AMOUNT = botConfig.economy?.workMin ?? 10;
 const MAX_WORK_AMOUNT = botConfig.economy?.workMax ?? 100;
 const LAPTOP_MULTIPLIER = 1.5;
-const EXTRA_WORK_COOLDOWN = 24 * 60 * 60 * 1000; // 额外工作冷却 24 小时
 
 // 🟢 请在这里填入你伺服器「集满所有职业」的专属身分组 ID
 const WORK_SPECIAL_ROLE_ID = '1540061423034699827';
@@ -56,57 +55,48 @@ export default {
 
         const lastWork = userData.lastWork || 0;
         const inventory = userData.inventory || {};
-        const upgrades = userData.upgrades || {};          // 新增：获取升级信息
+        const upgrades = userData.upgrades || {};
         const hasLaptop = inventory["laptop"] || 0;
-        const hasExtraWork = upgrades["extra_work"] || false; // 是否拥有永久额外工作
+        const hasDoubleWork = upgrades["extra_work"] || false; // 是否拥有双倍工作升级
 
-        let cooldownActive = now < lastWork + WORK_COOLDOWN;
-        let usedExtraWork = false;
+        // 检查冷却（普通冷却，没有额外机会）
+        if (now < lastWork + WORK_COOLDOWN) {
+            const remaining = lastWork + WORK_COOLDOWN - now;
+            throw createError(
+                "Work cooldown active",
+                ErrorTypes.RATE_LIMIT,
+                `你工作得太快了！請等待 **${Math.floor(remaining / 3600000)}小時 ${Math.floor((remaining % 3600000) / 60000)}分鐘** 後再工作。`,
+                { timeRemaining: remaining, cooldownType: 'work' }
+            );
+        }
 
-        if (cooldownActive) {
-            if (hasExtraWork) {
-                // 检查额外工作的独立冷却
-                const lastExtraWork = userData.lastExtraWork || 0;
-                const extraWorkReady = now >= lastExtraWork + EXTRA_WORK_COOLDOWN;
+        // 决定工作次数：1次或2次
+        const workTimes = hasDoubleWork ? 2 : 1;
+        const workResults = [];  // 存储每次工作的职业和收入
+        let totalEarned = 0;
 
-                if (extraWorkReady) {
-                    usedExtraWork = true;
-                    userData.lastExtraWork = now;  // 更新额外工作冷却时间
-                } else {
-                    const remainingExtra = lastExtraWork + EXTRA_WORK_COOLDOWN - now;
-                    throw createError(
-                        "Extra work cooldown active",
-                        ErrorTypes.RATE_LIMIT,
-                        `你的額外工作機會還在冷卻中！請等待 **${Math.floor(remainingExtra / 3600000)}小時 ${Math.floor((remainingExtra % 3600000) / 60000)}分鐘** 後再使用。`,
-                        { timeRemaining: remainingExtra, cooldownType: 'extra_work' }
-                    );
-                }
-            } else {
-                const remaining = lastWork + WORK_COOLDOWN - now;
-                throw createError(
-                    "Work cooldown active",
-                    ErrorTypes.RATE_LIMIT,
-                    `你工作得太快了！請等待 **${Math.floor(remaining / 3600000)}小時 ${Math.floor((remaining % 3600000) / 60000)}分鐘** 後再工作。`,
-                    { timeRemaining: remaining, cooldownType: 'work' }
-                );
+        for (let i = 0; i < workTimes; i++) {
+            // 随机选择职业
+            const jobObj = WORK_JOBS[Math.floor(Math.random() * WORK_JOBS.length)];
+            // 随机收入
+            let earned = Math.floor(Math.random() * (MAX_WORK_AMOUNT - MIN_WORK_AMOUNT + 1)) + MIN_WORK_AMOUNT;
+
+            // 应用笔记本加成
+            if (hasLaptop > 0) {
+                earned = Math.floor(earned * LAPTOP_MULTIPLIER);
             }
+
+            totalEarned += earned;
+            workResults.push({ job: jobObj, amount: earned });
+
+            // 记录职业进度
+            if (!userData.workedJobs) userData.workedJobs = {};
+            userData.workedJobs[jobObj.id] = (userData.workedJobs[jobObj.id] || 0) + 1;
         }
 
-        let earned = Math.floor(Math.random() * (MAX_WORK_AMOUNT - MIN_WORK_AMOUNT + 1)) + MIN_WORK_AMOUNT;
-        const jobObj = WORK_JOBS[Math.floor(Math.random() * WORK_JOBS.length)];
-
-        let multiplierMessage = "";
-        if (hasLaptop > 0) {
-            earned = Math.floor(earned * LAPTOP_MULTIPLIER);
-            multiplierMessage = "\n💻 **筆電加成：** 收益 +50%！";
-        }
-
-        userData.wallet = (userData.wallet || 0) + earned;
+        // 更新钱包和最后工作时间
+        userData.wallet = (userData.wallet || 0) + totalEarned;
         userData.lastWork = now;
-
-        // 记录工作职业进度
-        if (!userData.workedJobs) userData.workedJobs = {};
-        userData.workedJobs[jobObj.id] = (userData.workedJobs[jobObj.id] || 0) + 1;
 
         await setEconomyData(client, guildId, userId, userData);
 
@@ -129,17 +119,37 @@ export default {
         logger.info(`[ECONOMY_TRANSACTION] Work completed`, {
             userId,
             guildId,
-            amount: earned,
-            job: jobObj.name,
-            usedExtraWork,
+            amount: totalEarned,
+            jobs: workResults.map(r => r.job.name),
+            hasDoubleWork,
             hasLaptop: hasLaptop > 0,
             newWallet: userData.wallet,
             timestamp: new Date().toISOString()
         });
 
+        // 构建结果描述
+        let workDescription = '';
+        if (workResults.length === 1) {
+            workDescription = `你擔任了 **${workResults[0].job.name}** 並賺取了 **$${workResults[0].amount.toLocaleString()}**！`;
+        } else {
+            workDescription = `你完成了兩份工作：\n`;
+            workResults.forEach((result, idx) => {
+                workDescription += `\n**工作 ${idx + 1}：** ${result.job.name} - 賺取 **$${result.amount.toLocaleString()}**`;
+            });
+            workDescription += `\n\n💰 **總收入：** $${totalEarned.toLocaleString()}`;
+        }
+
+        // 添加笔记本加成提示（如果有）
+        if (hasLaptop > 0) {
+            workDescription += `\n💻 **筆電加成：** 每份工作收益 +50%！`;
+        }
+
+        // 添加角色奖励信息
+        workDescription += roleAwardedMessage;
+
         const embed = successEmbed(
             "💼 工作完成！",
-            `你擔任了 **${jobObj.name}** 並賺取了 **$${earned.toLocaleString()}**！${multiplierMessage}${roleAwardedMessage}\n📋 *(已將此職業記錄至你的收集冊)*`
+            workDescription
         )
             .addFields(
                 {
