@@ -70,7 +70,10 @@ export default {
             .map(([itemId, level]) => {
                 const item = shopItems.find(i => i.id === itemId);
                 const itemName = item ? item.name : itemId;
-                return `• **${itemName}** (\`${itemId}\`)：Lv.${level}`;
+                // ✅ 修改点：一次性升级（maxLevel === 1）显示为“已擁有”，而不是 Lv.1
+                const isOneTime = item && item.type === 'upgrade' && item.maxLevel === 1;
+                const displayValue = isOneTime ? '已擁有' : `Lv.${level}`;
+                return `• **${itemName}** (\`${itemId}\`)：${displayValue}`;
             });
 
         // 3. 保險箱防護狀態解析
