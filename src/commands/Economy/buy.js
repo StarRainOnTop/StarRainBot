@@ -168,7 +168,13 @@ export default {
             // 累加升級等級
             userData.upgrades[itemId] = (userData.upgrades[itemId] || 0) + quantity;
             const currentLevel = userData.upgrades[itemId];
-            successDescription += `\n\n**✨ 您的 ${item.name} 已提升至 Lv.${currentLevel}！**`;
+            
+            // ✅ 修改點：一次性升級（maxLevel === 1）顯示「已獲得」，否則顯示等級
+            if (item.maxLevel === 1) {
+                successDescription += `\n\n**✨ 您已獲得 ${item.name}！**`;
+            } else {
+                successDescription += `\n\n**✨ 您的 ${item.name} 已提升至 Lv.${currentLevel}！**`;
+            }
         } else if (item.id === "personal_safe") {
             // 個人保險箱：依照耐久度（預設 5）與購買數量計算總防禦次數並累加
             const durabilityPerItem = item.durability || 5;
