@@ -35,6 +35,18 @@ export const shopItems = [
         }
     },
     {
+        id: 'diamond_fishing_rod',
+        name: '💎 鑽石釣竿',
+        price: 25000,
+        description: '增加釣魚收益 +100%。',
+        type: 'tool',
+        durability: 100,
+        effect: {
+            type: 'fishing_yield',
+            multiplier: 2.0
+        }
+    },
+    {
         id: 'premium_role',
         name: '高級伺服器身分組',
         price: 50000,
