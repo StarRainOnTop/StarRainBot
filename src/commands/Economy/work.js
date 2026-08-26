@@ -10,8 +10,9 @@ const WORK_COOLDOWN = botConfig.economy?.cooldowns?.work ?? 15 * 60 * 1000;
 const MIN_WORK_AMOUNT = botConfig.economy?.workMin ?? 10;
 const MAX_WORK_AMOUNT = botConfig.economy?.workMax ?? 100;
 const LAPTOP_MULTIPLIER = 1.5;
+const EXTRA_WORK_COOLDOWN = 24 * 60 * 60 * 1000; // 额外工作冷却 24 小时
 
-// 🟢 請在這裡填入你伺服器「集滿所有職業」的專屬身分組 ID
+// 🟢 请在这里填入你伺服器「集满所有职业」的专属身分组 ID
 const WORK_SPECIAL_ROLE_ID = '1540061423034699827';
 
 const WORK_JOBS = [
@@ -55,16 +56,31 @@ export default {
 
         const lastWork = userData.lastWork || 0;
         const inventory = userData.inventory || {};
-        const extraWorkShifts = inventory["extra_work"] || 0;
+        const upgrades = userData.upgrades || {};          // 新增：获取升级信息
         const hasLaptop = inventory["laptop"] || 0;
+        const hasExtraWork = upgrades["extra_work"] || false; // 是否拥有永久额外工作
 
         let cooldownActive = now < lastWork + WORK_COOLDOWN;
-        let usedConsumable = false;
+        let usedExtraWork = false;
 
         if (cooldownActive) {
-            if (extraWorkShifts > 0) {
-                inventory["extra_work"] = (inventory["extra_work"] || 0) - 1;
-                usedConsumable = true;
+            if (hasExtraWork) {
+                // 检查额外工作的独立冷却
+                const lastExtraWork = userData.lastExtraWork || 0;
+                const extraWorkReady = now >= lastExtraWork + EXTRA_WORK_COOLDOWN;
+
+                if (extraWorkReady) {
+                    usedExtraWork = true;
+                    userData.lastExtraWork = now;  // 更新额外工作冷却时间
+                } else {
+                    const remainingExtra = lastExtraWork + EXTRA_WORK_COOLDOWN - now;
+                    throw createError(
+                        "Extra work cooldown active",
+                        ErrorTypes.RATE_LIMIT,
+                        `你的額外工作機會還在冷卻中！請等待 **${Math.floor(remainingExtra / 3600000)}小時 ${Math.floor((remainingExtra % 3600000) / 60000)}分鐘** 後再使用。`,
+                        { timeRemaining: remainingExtra, cooldownType: 'extra_work' }
+                    );
+                }
             } else {
                 const remaining = lastWork + WORK_COOLDOWN - now;
                 throw createError(
@@ -88,13 +104,13 @@ export default {
         userData.wallet = (userData.wallet || 0) + earned;
         userData.lastWork = now;
 
-        // 記錄工作職業進度
+        // 记录工作职业进度
         if (!userData.workedJobs) userData.workedJobs = {};
         userData.workedJobs[jobObj.id] = (userData.workedJobs[jobObj.id] || 0) + 1;
 
         await setEconomyData(client, guildId, userId, userData);
 
-        // 檢查是否集滿所有 10 種工作職業
+        // 检查是否集满所有 10 种工作职业
         let roleAwardedMessage = "";
         try {
             const member = await interaction.guild.members.fetch(userId);
@@ -115,7 +131,7 @@ export default {
             guildId,
             amount: earned,
             job: jobObj.name,
-            usedConsumable,
+            usedExtraWork,
             hasLaptop: hasLaptop > 0,
             newWallet: userData.wallet,
             timestamp: new Date().toISOString()
