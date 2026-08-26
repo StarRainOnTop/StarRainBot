@@ -1,18 +1,15 @@
 export const shopItems = [
     {
-        id: 'extra_work',
-        name: '額外工作時數',
-        price: 5000,
-        description: '允許額外使用 1 次 `/work` 指令。',
-        type: 'consumable',
-        maxQuantity: 5,
-        cooldown: 86400000,
-        effect: {
-            type: 'command_boost',
-            command: 'work',
-            uses: 1
-        }
-    },
+    id: 'extra_work',
+    name: '額外工作時數',
+    price: 5000,
+    description: '永久解鎖：每次工作獲得雙倍職業與收入（冷卻不變）。',
+    type: 'upgrade',
+    maxLevel: 1,
+    effect: {
+        type: 'double_work'
+    }
+},
     {
         id: 'bank_upgrade_1',
         name: '銀行升級 I',
@@ -136,53 +133,53 @@ export const shopItems = [
         }
     },
     {
-    id: 'disguise_mask',
-    name: '🕶️ 面具',
-    price: 3000,
-    description: '降低犯罪失敗時的罰款金額。使用次數上限 5 次，每次犯罪消耗 1 個。',
-    type: 'consumable',
-    maxQuantity: 5,
-    effect: {
-        type: 'crime_fine_reduction',
-        reduction: 0.5  // 罰款減半
-    }
-},
-{
-    id: 'lockpick',
-    name: '🔧 萬能鑰匙',
-    price: 5000,
-    description: '提高犯罪成功率。使用次數上限 5 次，每次犯罪消耗 1 個。',
-    type: 'consumable',
-    maxQuantity: 5,
-    effect: {
-        type: 'crime_success_boost',
-        boost: 0.15  // 失敗率降低 15%
-    }
-},
+        id: 'disguise_mask',
+        name: '🕶️ 面具',
+        price: 3000,
+        description: '降低犯罪失敗時的罰款金額。使用次數上限 5 次，每次犯罪消耗 1 個。',
+        type: 'consumable',
+        maxQuantity: 5,
+        effect: {
+            type: 'crime_fine_reduction',
+            reduction: 0.5  // 罰款減半
+        }
+    },
     {
-    id: 'beg_hat',
-    name: '🎩 破舊帽子',
-    price: 150,
-    description: '提高乞討成功率。每次乞討消耗 1 個。',
-    type: 'consumable',
-    maxQuantity: 5,
-    effect: {
-        type: 'beg_success_boost',
-        boost: 0.10  // 成功率 +10%
-    }
-},
-{
-    id: 'beg_sign',
-    name: '🪧 創意標語板',
-    price: 150,
-    description: '增加乞討成功時獲得的金額。每次乞討消耗 1 個。',
-    type: 'consumable',
-    maxQuantity: 5,
-    effect: {
-        type: 'beg_amount_boost',
-        multiplier: 1.5  // 金額 x1.5
-    }
-},
+        id: 'lockpick',
+        name: '🔧 萬能鑰匙',
+        price: 5000,
+        description: '提高犯罪成功率。使用次數上限 5 次，每次犯罪消耗 1 個。',
+        type: 'consumable',
+        maxQuantity: 5,
+        effect: {
+            type: 'crime_success_boost',
+            boost: 0.15  // 失敗率降低 15%
+        }
+    },
+    {
+        id: 'beg_hat',
+        name: '🎩 破舊帽子',
+        price: 150,
+        description: '提高乞討成功率。每次乞討消耗 1 個。',
+        type: 'consumable',
+        maxQuantity: 5,
+        effect: {
+            type: 'beg_success_boost',
+            boost: 0.10  // 成功率 +10%
+        }
+    },
+    {
+        id: 'beg_sign',
+        name: '🪧 創意標語板',
+        price: 150,
+        description: '增加乞討成功時獲得的金額。每次乞討消耗 1 個。',
+        type: 'consumable',
+        maxQuantity: 5,
+        effect: {
+            type: 'beg_amount_boost',
+            multiplier: 1.5  // 金額 x1.5
+        }
+    },
     {
         id: 'personal_safe',
         name: '🔒 個人保險箱',
