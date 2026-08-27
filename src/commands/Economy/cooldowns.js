@@ -1,5 +1,5 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { successEmbed } from '../../utils/embeds.js';
+import { successEmbed, warningEmbed } from '../../utils/embeds.js';
 import { getEconomyData } from '../../utils/economy.js';
 import { withErrorHandling, createError, ErrorTypes } from '../../utils/errorHandler.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
@@ -9,23 +9,23 @@ const COOLDOWN_FIELDS = {
     work: 'lastWork',
     mine: 'lastMine',
     slut: 'lastSlut',
-    crime: 'lastCrime',      // 🔥 保留但 crime 會特殊處理
+    crime: 'lastCrime',      // 保留但 crime 會特殊處理
     rob: 'lastRob',
     beg: 'lastBeg',
     fish: 'lastFish',
     gamble: 'lastGamble',
 };
 
-// 🔥 各指令的冷卻時間（與實際指令保持一致）
+// 各指令的冷卻時間（與實際指令保持一致）
 const COOLDOWN_DURATIONS = {
     work: 60 * 60 * 1000,           // 1 小時
-    mine: 35 * 60 * 1000,           // 35 分鐘（與 mine.js 一致）
-    slut: 30 * 60 * 1000,           // 30 分鐘（與 slut.js 一致）
-    crime: 30 * 60 * 1000,          // 30 分鐘（失敗時）/ 15 分鐘（成功時），這裡用平均
-    rob: 2 * 60 * 60 * 1000,        // 2 小時（與 rob.js 一致）
-    beg: 15 * 60 * 1000,            // 15 分鐘（與 beg.js 一致）
-    fish: 35 * 60 * 1000,           // 35 分鐘（與 fish.js 一致）
-    gamble: 5 * 60 * 1000,          // 5 分鐘（與 gamble.js 一致）
+    mine: 35 * 60 * 1000,           // 35 分鐘
+    slut: 30 * 60 * 1000,           // 30 分鐘
+    crime: 30 * 60 * 1000,          // 30 分鐘（失敗時）/ 15 分鐘（成功時），這裡用平均值
+    rob: 2 * 60 * 60 * 1000,        // 2 小時
+    beg: 15 * 60 * 1000,            // 15 分鐘
+    fish: 35 * 60 * 1000,           // 35 分鐘
+    gamble: 5 * 60 * 1000,          // 5 分鐘
 };
 
 // 指令的顯示名稱與表情符號
@@ -90,56 +90,90 @@ export default {
         const now = Date.now();
         const cooldownStatus = [];
 
+        // 🔥🔥🔥 檢查是否在監獄中 🔥🔥🔥
+        const isJailed = userData.jailedUntil && userData.jailedUntil > now;
+        let jailRemainingMs = 0;
+        let jailStatusText = '';
+
+        if (isJailed) {
+            jailRemainingMs = userData.jailedUntil - now;
+            const jailMinutes = Math.ceil(jailRemainingMs / 60000);
+            const jailHours = Math.floor(jailMinutes / 60);
+            const jailMins = jailMinutes % 60;
+
+            if (jailHours > 0) {
+                jailStatusText = `⛔ 在監獄中（剩餘 ${jailHours} 時 ${jailMins} 分）`;
+            } else {
+                jailStatusText = `⛔ 在監獄中（剩餘 ${jailMins} 分鐘）`;
+            }
+        }
+
         // 計算每個指令的冷卻狀態
         for (const [cmdKey, fieldName] of Object.entries(COOLDOWN_FIELDS)) {
-            // 🔥 特殊處理：crime 使用 cooldowns.crime
+            // 特殊處理 crime（因為它用 cooldowns.crime）
             let lastUsed;
             if (cmdKey === 'crime') {
                 lastUsed = userData.cooldowns?.crime || 0;
             } else {
                 lastUsed = userData[fieldName] || 0;
             }
-            
+
             const cooldownMs = COOLDOWN_DURATIONS[cmdKey] || 60 * 60 * 1000;
             const elapsed = now - lastUsed;
             const remaining = Math.max(0, cooldownMs - elapsed);
             const isReady = remaining <= 0;
 
             const display = COMMAND_DISPLAY[cmdKey] || { emoji: '❓', name: cmdKey };
-            const remainingSeconds = Math.ceil(remaining / 1000);
-            const remainingMinutes = Math.floor(remainingSeconds / 60);
-            const remainingSecs = remainingSeconds % 60;
 
             let statusText;
-            if (isReady) {
+
+            // 🔥🔥🔥 如果在監獄中，所有指令都顯示監獄狀態（但持續顯示冷卻剩餘時間）
+            if (isJailed) {
+                // 如果剩餘監獄時間 > 冷卻時間，顯示監獄狀態
+                // 否則顯示原本的冷卻狀態（但會被監獄覆蓋）
+                statusText = jailStatusText;
+            } else if (isReady) {
                 statusText = '✅ 就緒';
-            } else if (remainingSeconds < 60) {
-                statusText = `⏳ 剩餘 ${remainingSeconds} 秒`;
-            } else if (remainingSeconds < 3600) {
-                statusText = `⏳ 剩餘 ${remainingMinutes} 分 ${remainingSecs} 秒`;
             } else {
-                const hours = Math.floor(remainingSeconds / 3600);
-                const mins = Math.floor((remainingSeconds % 3600) / 60);
-                statusText = `⏳ 剩餘 ${hours} 時 ${mins} 分`;
+                const remainingSeconds = Math.ceil(remaining / 1000);
+                const remainingMinutes = Math.floor(remainingSeconds / 60);
+                const remainingSecs = remainingSeconds % 60;
+
+                if (remainingSeconds < 60) {
+                    statusText = `⏳ 剩餘 ${remainingSeconds} 秒`;
+                } else if (remainingSeconds < 3600) {
+                    statusText = `⏳ 剩餘 ${remainingMinutes} 分 ${remainingSecs} 秒`;
+                } else {
+                    const hours = Math.floor(remainingSeconds / 3600);
+                    const mins = Math.floor((remainingSeconds % 3600) / 60);
+                    statusText = `⏳ 剩餘 ${hours} 時 ${mins} 分`;
+                }
             }
 
             cooldownStatus.push({
                 emoji: display.emoji,
                 name: display.name,
                 field: cmdKey,
-                isReady,
+                isReady: isReady && !isJailed,  // 如果入獄，視為未就緒
                 status: statusText,
             });
         }
 
-        // 計算就緒數量
+        // 計算就緒數量（入獄時全部不算就緒）
         const readyCount = cooldownStatus.filter(c => c.isReady).length;
         const totalCount = cooldownStatus.length;
 
         // 生成 Embed
+        let description = `共 ${totalCount} 個指令，${readyCount} 個已就緒，${totalCount - readyCount} 個冷卻中`;
+
+        // 如果入獄，在描述中特別提示
+        if (isJailed) {
+            description = `🚨 **${targetUser.username} 正在監獄中！**\n${description}\n⛔ 監獄期間無法使用任何經濟指令。`;
+        }
+
         const embed = successEmbed(
             `⏱️ ${targetUser.username} 的冷卻狀態`,
-            `共 ${totalCount} 個指令，${readyCount} 個已就緒，${totalCount - readyCount} 個冷卻中`
+            description
         )
             .setThumbnail(targetUser.displayAvatarURL({ dynamic: true }))
             .setFooter({
