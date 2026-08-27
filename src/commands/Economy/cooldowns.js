@@ -90,7 +90,7 @@ export default {
         const now = Date.now();
         const cooldownStatus = [];
 
-        // 🔥🔥🔥 檢查是否在監獄中 🔥🔥🔥
+        // 🔥 檢查是否在監獄中（只影響 crime）
         const isJailed = userData.jailedUntil && userData.jailedUntil > now;
         let jailRemainingMs = 0;
         let jailStatusText = '';
@@ -127,10 +127,8 @@ export default {
 
             let statusText;
 
-            // 🔥🔥🔥 如果在監獄中，所有指令都顯示監獄狀態（但持續顯示冷卻剩餘時間）
-            if (isJailed) {
-                // 如果剩餘監獄時間 > 冷卻時間，顯示監獄狀態
-                // 否則顯示原本的冷卻狀態（但會被監獄覆蓋）
+            // 🔥🔥🔥 只有 crime 會受到監獄影響！ 🔥🔥🔥
+            if (cmdKey === 'crime' && isJailed) {
                 statusText = jailStatusText;
             } else if (isReady) {
                 statusText = '✅ 就緒';
@@ -150,25 +148,28 @@ export default {
                 }
             }
 
+            // 🔥 只有 crime 會被監獄影響就緒狀態
+            const isActuallyReady = (cmdKey === 'crime' && isJailed) ? false : isReady;
+
             cooldownStatus.push({
                 emoji: display.emoji,
                 name: display.name,
                 field: cmdKey,
-                isReady: isReady && !isJailed,  // 如果入獄，視為未就緒
+                isReady: isActuallyReady,
                 status: statusText,
             });
         }
 
-        // 計算就緒數量（入獄時全部不算就緒）
+        // 計算就緒數量
         const readyCount = cooldownStatus.filter(c => c.isReady).length;
         const totalCount = cooldownStatus.length;
 
         // 生成 Embed
         let description = `共 ${totalCount} 個指令，${readyCount} 個已就緒，${totalCount - readyCount} 個冷卻中`;
 
-        // 如果入獄，在描述中特別提示
+        // 🔥 如果入獄，只影響 crime 的提示（在描述中特別說明）
         if (isJailed) {
-            description = `🚨 **${targetUser.username} 正在監獄中！**\n${description}\n⛔ 監獄期間無法使用任何經濟指令。`;
+            description = `🔫 **${targetUser.username} 正在監獄中，無法使用 /crime！**\n${description}`;
         }
 
         const embed = successEmbed(
