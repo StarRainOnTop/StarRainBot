@@ -268,8 +268,8 @@ async function registerCommandsTarget(client, clientId, guildId, commands, total
 }
 
 export async function registerCommands(client, options = {}) {
-    // 強制將 guildId 設定為 null，確保一定會註冊為全域指令
-    const { clientId = null, guildId = null } = options;
+    // 🔥 暫時強制改成你的測試伺服器 ID（立即生效）
+    const { clientId = null, guildId = '783858618386219059' } = options;  // 把這裡換成你的伺服器ID
 
     try {
         const { commands, totalSubcommands } = collectCommandPayloads(client);
