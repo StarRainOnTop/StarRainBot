@@ -3,6 +3,7 @@ import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { Collection } from 'discord.js';
 import { logger } from '../../utils/logger.js';
+import botConfig from '../../config/bot.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -38,6 +39,9 @@ async function getAllFiles(directory, fileList = []) {
         const filePath = path.join(directory, file.name);
         
         if (file.isDirectory()) {
+            if (file.name === 'modules') {
+                continue;
+            }
             await getAllFiles(filePath, fileList);
         } else if (file.name.endsWith('.js')) {
             fileList.push(filePath);
@@ -121,31 +125,37 @@ function collectCommandPayloads(client) {
     let totalSubcommands = 0;
     const registeredNames = new Set();
 
+    // 🔥 只註冊這些指令（測試用，可自行調整）
+    const allowedCommands = ['guess', 'cd_remove'];
+
     for (const command of client.commands.values()) {
-        try {
-            if (!command.data || typeof command.data.toJSON !== 'function') {
-                logger.warn(`Command missing data or toJSON method: ${command}`);
-                continue;
-            }
+        if (!command.data || typeof command.data.toJSON !== 'function') {
+            logger.warn(`Command missing data or toJSON method: ${command}`);
+            continue;
+        }
 
-            const commandName = command.data.name;
-            logger.debug(`Processing command for registration: ${commandName}`);
+        const commandName = command.data.name;
+        
+        // 🔥 跳過不在允許清單中的指令
+        if (!allowedCommands.includes(commandName)) {
+            logger.debug(`Skipping command: ${commandName} (not in test list)`);
+            continue;
+        }
 
-            if (registeredNames.has(commandName)) {
-                logger.debug(`Skipping duplicate command: ${commandName}`);
-                continue;
-            }
+        logger.debug(`Processing command for registration: ${commandName}`);
 
-            registeredNames.add(commandName);
-            const commandJson = command.data.toJSON();
-            commands.push(commandJson);
-            totalSubcommands += getSubcommandInfo(commandJson).length;
+        if (registeredNames.has(commandName)) {
+            logger.debug(`Skipping duplicate command: ${commandName}`);
+            continue;
+        }
 
-            if (process.env.NODE_ENV !== 'production') {
-                logger.debug(`Registering command: ${commandName}`);
-            }
-        } catch (err) {
-            logger.error(`Error processing command ${command?.data?.name || 'unknown'}:`, err);
+        registeredNames.add(commandName);
+        const commandJson = command.data.toJSON();
+        commands.push(commandJson);
+        totalSubcommands += getSubcommandInfo(commandJson).length;
+
+        if (process.env.NODE_ENV !== 'production') {
+            logger.debug(`Registering command: ${commandName}`);
         }
     }
 
@@ -223,7 +233,7 @@ function validateCommands(commands) {
 
 function prepareCommandsForRegistration(commands) {
     if (commands.length >= COMMAND_COUNT_WARN_THRESHOLD) {
-        logger.warn(`Command count (${commands.length}) is near Discord's ${MAX_COMMANDS} guild command limit`);
+        logger.warn(`Command count (${commands.length}) is near Discord's ${MAX_COMMANDS} global command limit`);
     }
 
     if (commands.length <= MAX_COMMANDS) {
@@ -236,7 +246,10 @@ function prepareCommandsForRegistration(commands) {
     return truncated;
 }
 
-async function registerCommandsTarget(client, clientId, guildId, commands, totalSubcommands) {
+/**
+ * 註冊全域指令（所有伺服器）
+ */
+async function registerGlobalCommands(client, clientId, commands, totalSubcommands) {
     if (!clientId) {
         throw new Error('CLIENT_ID is required for slash command registration');
     }
@@ -245,69 +258,66 @@ async function registerCommandsTarget(client, clientId, guildId, commands, total
         throw new Error('Discord REST client is not available for slash command registration');
     }
 
-    logger.info(`[DEBUG] validateCommands starting...`);
+    logger.info(`Preparing to register ${commands.length} global commands`);
+    logger.info('Validating commands before registration...');
     validateCommands(commands);
-    logger.info(`[DEBUG] validateCommands passed.`);
+    logger.info('Command validation passed');
 
     const commandsToRegister = prepareCommandsForRegistration(commands);
-    logger.info(`[DEBUG] commandsToRegister length: ${commandsToRegister.length}`);
 
-    // 🔥🔥🔥 分批註冊（每批 15 個，避免超時和限流） 🔥🔥🔥
-    const BATCH_SIZE = 15;
-    const batches = [];
-    for (let i = 0; i < commandsToRegister.length; i += BATCH_SIZE) {
-        batches.push(commandsToRegister.slice(i, i + BATCH_SIZE));
+    if (botConfig.commands?.deleteCommands) {
+        logger.info('Clearing existing global commands before registration...');
+        await client.rest.put(`/applications/${clientId}/commands`, { body: [] });
     }
 
-    logger.info(`[DEBUG] Splitting ${commandsToRegister.length} commands into ${batches.length} batches of up to ${BATCH_SIZE}`);
+    logger.info(`Registering ${commandsToRegister.length} global commands (this may take a moment)...`);
+    await client.rest.put(`/applications/${clientId}/commands`, { body: commandsToRegister });
+    logger.info(`✅ Successfully registered ${commandsToRegister.length} global commands`);
+    logger.info('Global commands may take up to an hour to appear in all servers on first deploy');
+}
 
-    try {
-        for (let i = 0; i < batches.length; i++) {
-            const batch = batches[i];
-            const batchNum = i + 1;
-            logger.info(`[DEBUG] Registering batch ${batchNum}/${batches.length} (${batch.length} commands)...`);
-
-            if (guildId) {
-                await client.rest.put(`/applications/${clientId}/guilds/${guildId}/commands`, { body: batch });
-                logger.info(`✅ Batch ${batchNum}: registered ${batch.length} guild commands for server ${guildId}`);
-            } else {
-                await client.rest.put(`/applications/${clientId}/commands`, { body: batch });
-                logger.info(`✅ Batch ${batchNum}: registered ${batch.length} global commands`);
-            }
-
-            // 每批之間等待 2.5 秒，避免被 Discord API 限流
-            if (i < batches.length - 1) {
-                logger.debug(`⏳ Waiting 2.5 seconds before next batch...`);
-                await new Promise(resolve => setTimeout(resolve, 2500));
-            }
-        }
-
-        logger.info(`✅ Successfully registered all ${commandsToRegister.length} commands in ${batches.length} batches`);
-    } catch (error) {
-        logger.error('❌ Failed to register commands with Discord API!');
-        if (error.rawError) {
-            logger.error('Discord Raw Error:', JSON.stringify(error.rawError, null, 2));
-        } else {
-            logger.error('Error details:', error);
-        }
-        throw error;
+/**
+ * 註冊特定伺服器（Guild）指令（立即生效）
+ */
+async function registerGuildCommands(client, clientId, guildId, commands, totalSubcommands) {
+    if (!clientId) {
+        throw new Error('CLIENT_ID is required for slash command registration');
     }
+    if (!guildId) {
+        throw new Error('GUILD_ID is required for guild command registration');
+    }
+    if (!client.rest) {
+        throw new Error('Discord REST client is not available for slash command registration');
+    }
+
+    logger.info(`Preparing to register ${commands.length} guild commands for server ${guildId}`);
+    logger.info('Validating commands before registration...');
+    validateCommands(commands);
+    logger.info('Command validation passed');
+
+    const commandsToRegister = prepareCommandsForRegistration(commands);
+
+    if (botConfig.commands?.deleteCommands) {
+        logger.info(`Clearing existing guild commands for server ${guildId} before registration...`);
+        await client.rest.put(`/applications/${clientId}/guilds/${guildId}/commands`, { body: [] });
+    }
+
+    logger.info(`Registering ${commandsToRegister.length} guild commands for server ${guildId}...`);
+    await client.rest.put(`/applications/${clientId}/guilds/${guildId}/commands`, { body: commandsToRegister });
+    logger.info(`✅ Successfully registered ${commandsToRegister.length} guild commands for server ${guildId}`);
 }
 
 export async function registerCommands(client, options = {}) {
-    // 🔥 強制指定測試伺服器（立即生效）
-    const { clientId = null, guildId = '783858618386219059' } = options;
-
-    logger.info(`[DEBUG] registerCommands called with clientId: ${clientId}, guildId: ${guildId}`);
+    const { clientId = null, guildId = null } = options;
 
     try {
-        logger.info(`[DEBUG] Calling collectCommandPayloads...`);
         const { commands, totalSubcommands } = collectCommandPayloads(client);
-        logger.info(`[DEBUG] collectCommandPayloads returned ${commands.length} commands, totalSubcommands: ${totalSubcommands}`);
         
-        logger.info(`[DEBUG] Calling registerCommandsTarget...`);
-        await registerCommandsTarget(client, clientId, guildId, commands, totalSubcommands);
-        logger.info(`[DEBUG] registerCommandsTarget completed successfully`);
+        if (guildId) {
+            await registerGuildCommands(client, clientId, guildId, commands, totalSubcommands);
+        } else {
+            await registerGlobalCommands(client, clientId, commands, totalSubcommands);
+        }
     } catch (error) {
         logger.error('Error registering commands:', error);
         throw error;
