@@ -146,7 +146,6 @@ function collectCommandPayloads(client) {
             }
         } catch (err) {
             logger.error(`Error processing command ${command?.data?.name || 'unknown'}:`, err);
-            // 繼續處理下一個指令
         }
     }
 
@@ -253,22 +252,37 @@ async function registerCommandsTarget(client, clientId, guildId, commands, total
     const commandsToRegister = prepareCommandsForRegistration(commands);
     logger.info(`[DEBUG] commandsToRegister length: ${commandsToRegister.length}`);
 
+    // 🔥🔥🔥 分批註冊（每批 15 個，避免超時和限流） 🔥🔥🔥
+    const BATCH_SIZE = 15;
+    const batches = [];
+    for (let i = 0; i < commandsToRegister.length; i += BATCH_SIZE) {
+        batches.push(commandsToRegister.slice(i, i + BATCH_SIZE));
+    }
+
+    logger.info(`[DEBUG] Splitting ${commandsToRegister.length} commands into ${batches.length} batches of up to ${BATCH_SIZE}`);
+
     try {
-        if (guildId) {
-            logger.info(`Preparing to register ${commandsToRegister.length} guild commands for server: ${guildId}`);
-            logger.info(`[DEBUG] About to PUT to /applications/${clientId}/guilds/${guildId}/commands`);
-            
-            const result = await client.rest.put(`/applications/${clientId}/guilds/${guildId}/commands`, { body: commandsToRegister });
-            logger.info(`[DEBUG] PUT request returned: ${JSON.stringify(result).slice(0, 200)}...`);
-            logger.info(`Successfully registered ${commandsToRegister.length} guild commands for server ${guildId}`);
-        } else {
-            logger.info(`Preparing to register ${commandsToRegister.length} global commands...`);
-            logger.info(`[DEBUG] About to PUT to /applications/${clientId}/commands`);
-            
-            const result = await client.rest.put(`/applications/${clientId}/commands`, { body: commandsToRegister });
-            logger.info(`[DEBUG] PUT request returned: ${JSON.stringify(result).slice(0, 200)}...`);
-            logger.info(`Successfully registered ${commandsToRegister.length} global commands`);
+        for (let i = 0; i < batches.length; i++) {
+            const batch = batches[i];
+            const batchNum = i + 1;
+            logger.info(`[DEBUG] Registering batch ${batchNum}/${batches.length} (${batch.length} commands)...`);
+
+            if (guildId) {
+                await client.rest.put(`/applications/${clientId}/guilds/${guildId}/commands`, { body: batch });
+                logger.info(`✅ Batch ${batchNum}: registered ${batch.length} guild commands for server ${guildId}`);
+            } else {
+                await client.rest.put(`/applications/${clientId}/commands`, { body: batch });
+                logger.info(`✅ Batch ${batchNum}: registered ${batch.length} global commands`);
+            }
+
+            // 每批之間等待 2.5 秒，避免被 Discord API 限流
+            if (i < batches.length - 1) {
+                logger.debug(`⏳ Waiting 2.5 seconds before next batch...`);
+                await new Promise(resolve => setTimeout(resolve, 2500));
+            }
         }
+
+        logger.info(`✅ Successfully registered all ${commandsToRegister.length} commands in ${batches.length} batches`);
     } catch (error) {
         logger.error('❌ Failed to register commands with Discord API!');
         if (error.rawError) {
