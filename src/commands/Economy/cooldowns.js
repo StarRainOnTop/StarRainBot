@@ -32,7 +32,7 @@ const COOLDOWN_DURATIONS = {
 const COMMAND_DISPLAY = {
     work: { emoji: '💼', name: '工作' },
     mine: { emoji: '⛏️', name: '挖礦' },
-    slut: { emoji: '💋', name: 'Slut' },
+    slut: { emoji: '💋', name: '當 Slut' },
     crime: { emoji: '🔫', name: '犯罪' },
     rob: { emoji: '💰', name: '搶劫' },
     beg: { emoji: '🫴', name: '乞討' },
@@ -81,7 +81,7 @@ export default {
         const now = Date.now();
         const cooldownStatus = [];
 
-        // 🔥 檢查是否在監獄中（只影響 crime）
+        // 檢查是否在監獄中（只影響 crime）
         const isJailed = userData.jailedUntil && userData.jailedUntil > now;
         let jailStatusText = '';
 
@@ -117,7 +117,7 @@ export default {
 
             let statusText;
 
-            // 🔥 只有 crime 會受到監獄影響
+            // 只有 crime 會受到監獄影響
             if (cmdKey === 'crime' && isJailed) {
                 statusText = jailStatusText;
             } else if (isReady) {
@@ -138,7 +138,7 @@ export default {
                 }
             }
 
-            // 🔥 只有 crime 會被監獄影響就緒狀態
+            // 只有 crime 會被監獄影響就緒狀態
             const isActuallyReady = (cmdKey === 'crime' && isJailed) ? false : isReady;
 
             cooldownStatus.push({
