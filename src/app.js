@@ -42,7 +42,10 @@ class TitanBot extends Client {
     this.modals = new Collection();
     this.cooldowns = new Collection();
     this.db = null;
-    this.rest = new REST({ version: '10' }).setToken(config.bot.token);
+    this.rest = new REST({ 
+    version: '10',
+    timeout: 60000   // 60 秒超時
+}).setToken(config.bot.token);
   }
 
   async start() {
