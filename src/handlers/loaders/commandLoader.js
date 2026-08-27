@@ -122,26 +122,31 @@ function collectCommandPayloads(client) {
     const registeredNames = new Set();
 
     for (const command of client.commands.values()) {
-        if (!command.data || typeof command.data.toJSON !== 'function') {
-            logger.warn(`Command missing data or toJSON method: ${command}`);
-            continue;
-        }
+        try {
+            if (!command.data || typeof command.data.toJSON !== 'function') {
+                logger.warn(`Command missing data or toJSON method: ${command}`);
+                continue;
+            }
 
-        const commandName = command.data.name;
-        logger.debug(`Processing command for registration: ${commandName}`);
+            const commandName = command.data.name;
+            logger.debug(`Processing command for registration: ${commandName}`);
 
-        if (registeredNames.has(commandName)) {
-            logger.debug(`Skipping duplicate command: ${commandName}`);
-            continue;
-        }
+            if (registeredNames.has(commandName)) {
+                logger.debug(`Skipping duplicate command: ${commandName}`);
+                continue;
+            }
 
-        registeredNames.add(commandName);
-        const commandJson = command.data.toJSON();
-        commands.push(commandJson);
-        totalSubcommands += getSubcommandInfo(commandJson).length;
+            registeredNames.add(commandName);
+            const commandJson = command.data.toJSON();
+            commands.push(commandJson);
+            totalSubcommands += getSubcommandInfo(commandJson).length;
 
-        if (process.env.NODE_ENV !== 'production') {
-            logger.debug(`Registering command: ${commandName}`);
+            if (process.env.NODE_ENV !== 'production') {
+                logger.debug(`Registering command: ${commandName}`);
+            }
+        } catch (err) {
+            logger.error(`Error processing command ${command?.data?.name || 'unknown'}:`, err);
+            // 繼續處理下一個指令
         }
     }
 
@@ -241,19 +246,27 @@ async function registerCommandsTarget(client, clientId, guildId, commands, total
         throw new Error('Discord REST client is not available for slash command registration');
     }
 
+    logger.info(`[DEBUG] validateCommands starting...`);
     validateCommands(commands);
+    logger.info(`[DEBUG] validateCommands passed.`);
+
     const commandsToRegister = prepareCommandsForRegistration(commands);
+    logger.info(`[DEBUG] commandsToRegister length: ${commandsToRegister.length}`);
 
     try {
         if (guildId) {
             logger.info(`Preparing to register ${commandsToRegister.length} guild commands for server: ${guildId}`);
+            logger.info(`[DEBUG] About to PUT to /applications/${clientId}/guilds/${guildId}/commands`);
             
-            await client.rest.put(`/applications/${clientId}/guilds/${guildId}/commands`, { body: commandsToRegister });
+            const result = await client.rest.put(`/applications/${clientId}/guilds/${guildId}/commands`, { body: commandsToRegister });
+            logger.info(`[DEBUG] PUT request returned: ${JSON.stringify(result).slice(0, 200)}...`);
             logger.info(`Successfully registered ${commandsToRegister.length} guild commands for server ${guildId}`);
         } else {
             logger.info(`Preparing to register ${commandsToRegister.length} global commands...`);
+            logger.info(`[DEBUG] About to PUT to /applications/${clientId}/commands`);
             
-            await client.rest.put(`/applications/${clientId}/commands`, { body: commandsToRegister });
+            const result = await client.rest.put(`/applications/${clientId}/commands`, { body: commandsToRegister });
+            logger.info(`[DEBUG] PUT request returned: ${JSON.stringify(result).slice(0, 200)}...`);
             logger.info(`Successfully registered ${commandsToRegister.length} global commands`);
         }
     } catch (error) {
@@ -268,12 +281,19 @@ async function registerCommandsTarget(client, clientId, guildId, commands, total
 }
 
 export async function registerCommands(client, options = {}) {
-    // 🔥 暫時強制改成你的測試伺服器 ID（立即生效）
-    const { clientId = null, guildId = '783858618386219059' } = options;  // 把這裡換成你的伺服器ID
+    // 🔥 強制指定測試伺服器（立即生效）
+    const { clientId = null, guildId = '783858618386219059' } = options;
+
+    logger.info(`[DEBUG] registerCommands called with clientId: ${clientId}, guildId: ${guildId}`);
 
     try {
+        logger.info(`[DEBUG] Calling collectCommandPayloads...`);
         const { commands, totalSubcommands } = collectCommandPayloads(client);
+        logger.info(`[DEBUG] collectCommandPayloads returned ${commands.length} commands, totalSubcommands: ${totalSubcommands}`);
+        
+        logger.info(`[DEBUG] Calling registerCommandsTarget...`);
         await registerCommandsTarget(client, clientId, guildId, commands, totalSubcommands);
+        logger.info(`[DEBUG] registerCommandsTarget completed successfully`);
     } catch (error) {
         logger.error('Error registering commands:', error);
         throw error;
