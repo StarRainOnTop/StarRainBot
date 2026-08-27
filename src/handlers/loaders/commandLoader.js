@@ -125,7 +125,7 @@ function collectCommandPayloads(client) {
     const registeredNames = new Set();
 
     // 🔥 只註冊這兩個指令（測試用）
-    const allowedCommands = ['guess', 'cd_remove', 'withdraw'];
+    const allowedCommands = ['guess', 'cd_remove', 'withdraw', 'cooldowns'];
 
     for (const command of client.commands.values()) {
         if (!command.data || typeof command.data.toJSON !== 'function') {
