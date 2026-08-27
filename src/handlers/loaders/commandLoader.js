@@ -3,7 +3,6 @@ import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { Collection } from 'discord.js';
 import { logger } from '../../utils/logger.js';
-import botConfig from '../../config/bot.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -125,7 +124,7 @@ function collectCommandPayloads(client) {
     let totalSubcommands = 0;
     const registeredNames = new Set();
 
-    // 🔥 只註冊這些指令（測試用，可自行調整）
+    // 🔥 只註冊這兩個指令（測試用）
     const allowedCommands = ['guess', 'cd_remove'];
 
     for (const command of client.commands.values()) {
@@ -136,9 +135,7 @@ function collectCommandPayloads(client) {
 
         const commandName = command.data.name;
         
-        // 🔥 跳過不在允許清單中的指令
         if (!allowedCommands.includes(commandName)) {
-            logger.debug(`Skipping command: ${commandName} (not in test list)`);
             continue;
         }
 
@@ -247,47 +244,14 @@ function prepareCommandsForRegistration(commands) {
 }
 
 /**
- * 註冊全域指令（所有伺服器）
+ * 🔥 使用原生 fetch 註冊伺服器指令（保證超時生效）
  */
-async function registerGlobalCommands(client, clientId, commands, totalSubcommands) {
-    if (!clientId) {
-        throw new Error('CLIENT_ID is required for slash command registration');
-    }
-
-    if (!client.rest) {
-        throw new Error('Discord REST client is not available for slash command registration');
-    }
-
-    logger.info(`Preparing to register ${commands.length} global commands`);
-    logger.info('Validating commands before registration...');
-    validateCommands(commands);
-    logger.info('Command validation passed');
-
-    const commandsToRegister = prepareCommandsForRegistration(commands);
-
-    if (botConfig.commands?.deleteCommands) {
-        logger.info('Clearing existing global commands before registration...');
-        await client.rest.put(`/applications/${clientId}/commands`, { body: [] });
-    }
-
-    logger.info(`Registering ${commandsToRegister.length} global commands (this may take a moment)...`);
-    await client.rest.put(`/applications/${clientId}/commands`, { body: commandsToRegister });
-    logger.info(`✅ Successfully registered ${commandsToRegister.length} global commands`);
-    logger.info('Global commands may take up to an hour to appear in all servers on first deploy');
-}
-
-/**
- * 註冊特定伺服器（Guild）指令（立即生效）
- */
-async function registerGuildCommands(client, clientId, guildId, commands, totalSubcommands) {
+async function registerGuildCommands(client, clientId, guildId, commands) {
     if (!clientId) {
         throw new Error('CLIENT_ID is required for slash command registration');
     }
     if (!guildId) {
         throw new Error('GUILD_ID is required for guild command registration');
-    }
-    if (!client.rest) {
-        throw new Error('Discord REST client is not available for slash command registration');
     }
 
     logger.info(`Preparing to register ${commands.length} guild commands for server ${guildId}`);
@@ -296,28 +260,57 @@ async function registerGuildCommands(client, clientId, guildId, commands, totalS
     logger.info('Command validation passed');
 
     const commandsToRegister = prepareCommandsForRegistration(commands);
+    const url = `https://discord.com/api/v10/applications/${clientId}/guilds/${guildId}/commands`;
 
-    if (botConfig.commands?.deleteCommands) {
-        logger.info(`Clearing existing guild commands for server ${guildId} before registration...`);
-        await client.rest.put(`/applications/${clientId}/guilds/${guildId}/commands`, { body: [] });
+    logger.info(`[FETCH] PUT to ${url}`);
+    logger.info(`Registering ${commandsToRegister.length} guild commands...`);
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => {
+        controller.abort();
+        logger.error(`❌ Request timed out after 30 seconds`);
+    }, 30000);
+
+    try {
+        const response = await fetch(url, {
+            method: 'PUT',
+            headers: {
+                'Authorization': `Bot ${client.token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(commandsToRegister),
+            signal: controller.signal,
+        });
+
+        clearTimeout(timeout);
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            logger.error(`❌ Discord API responded with ${response.status}: ${errorText}`);
+            throw new Error(`Discord API error: ${response.status} - ${errorText}`);
+        }
+
+        const result = await response.json();
+        logger.info(`✅ Successfully registered ${commandsToRegister.length} guild commands for server ${guildId}`);
+        logger.debug(`Response: ${JSON.stringify(result).slice(0, 300)}`);
+        return result;
+    } catch (error) {
+        clearTimeout(timeout);
+        if (error.name === 'AbortError') {
+            logger.error(`❌ Request to Discord API timed out after 30 seconds`);
+        } else {
+            logger.error(`❌ Failed to register guild commands:`, error);
+        }
+        throw error;
     }
-
-    logger.info(`Registering ${commandsToRegister.length} guild commands for server ${guildId}...`);
-    await client.rest.put(`/applications/${clientId}/guilds/${guildId}/commands`, { body: commandsToRegister });
-    logger.info(`✅ Successfully registered ${commandsToRegister.length} guild commands for server ${guildId}`);
 }
 
 export async function registerCommands(client, options = {}) {
-    const { clientId = null, guildId = null } = options;
+    const { clientId = null, guildId = '783858618386219059' } = options;
 
     try {
         const { commands, totalSubcommands } = collectCommandPayloads(client);
-        
-        if (guildId) {
-            await registerGuildCommands(client, clientId, guildId, commands, totalSubcommands);
-        } else {
-            await registerGlobalCommands(client, clientId, commands, totalSubcommands);
-        }
+        await registerGuildCommands(client, clientId, guildId, commands);
     } catch (error) {
         logger.error('Error registering commands:', error);
         throw error;
