@@ -9,23 +9,23 @@ const COOLDOWN_FIELDS = {
     work: 'lastWork',
     mine: 'lastMine',
     slut: 'lastSlut',
-    crime: 'lastCrime',
+    crime: 'lastCrime',      // 🔥 保留但 crime 會特殊處理
     rob: 'lastRob',
     beg: 'lastBeg',
     fish: 'lastFish',
     gamble: 'lastGamble',
 };
 
-// 各指令的冷卻時間（毫秒）
+// 🔥 各指令的冷卻時間（與實際指令保持一致）
 const COOLDOWN_DURATIONS = {
     work: 60 * 60 * 1000,           // 1 小時
-    mine: 60 * 60 * 1000,           // 1 小時
-    slut: 60 * 60 * 1000,           // 1 小時
-    crime: 2 * 60 * 60 * 1000,      // 2 小時
-    rob: 4 * 60 * 60 * 1000,        // 4 小時
-    beg: 60 * 60 * 1000,            // 1 小時
-    fish: 60 * 60 * 1000,           // 1 小時
-    gamble: 60 * 60 * 1000,         // 1 小時
+    mine: 35 * 60 * 1000,           // 35 分鐘（與 mine.js 一致）
+    slut: 30 * 60 * 1000,           // 30 分鐘（與 slut.js 一致）
+    crime: 30 * 60 * 1000,          // 30 分鐘（失敗時）/ 15 分鐘（成功時），這裡用平均
+    rob: 2 * 60 * 60 * 1000,        // 2 小時（與 rob.js 一致）
+    beg: 15 * 60 * 1000,            // 15 分鐘（與 beg.js 一致）
+    fish: 35 * 60 * 1000,           // 35 分鐘（與 fish.js 一致）
+    gamble: 5 * 60 * 1000,          // 5 分鐘（與 gamble.js 一致）
 };
 
 // 指令的顯示名稱與表情符號
@@ -92,7 +92,14 @@ export default {
 
         // 計算每個指令的冷卻狀態
         for (const [cmdKey, fieldName] of Object.entries(COOLDOWN_FIELDS)) {
-            const lastUsed = userData[fieldName] || 0;
+            // 🔥 特殊處理：crime 使用 cooldowns.crime
+            let lastUsed;
+            if (cmdKey === 'crime') {
+                lastUsed = userData.cooldowns?.crime || 0;
+            } else {
+                lastUsed = userData[fieldName] || 0;
+            }
+            
             const cooldownMs = COOLDOWN_DURATIONS[cmdKey] || 60 * 60 * 1000;
             const elapsed = now - lastUsed;
             const remaining = Math.max(0, cooldownMs - elapsed);
@@ -140,14 +147,13 @@ export default {
                 iconURL: interaction.user.displayAvatarURL({ dynamic: true })
             });
 
-        // 將狀態分組為多個字段（避免超過 Discord Embed 的字段數量限制）
+        // 將狀態分組為多個字段
         const fields = cooldownStatus.map(c => ({
             name: `${c.emoji} ${c.name}`,
             value: c.status,
             inline: true,
         }));
 
-        // Discord Embed 最多 25 個欄位，我們有 8 個，所以一次顯示
         embed.addFields(fields);
 
         await InteractionHelper.safeEditReply(interaction, { embeds: [embed] });
