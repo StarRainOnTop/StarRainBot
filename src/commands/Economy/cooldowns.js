@@ -1,5 +1,5 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { successEmbed, warningEmbed } from '../../utils/embeds.js';
+import { successEmbed } from '../../utils/embeds.js';
 import { getEconomyData } from '../../utils/economy.js';
 import { withErrorHandling, createError, ErrorTypes } from '../../utils/errorHandler.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
@@ -9,7 +9,7 @@ const COOLDOWN_FIELDS = {
     work: 'lastWork',
     mine: 'lastMine',
     slut: 'lastSlut',
-    crime: 'lastCrime',      // 保留但 crime 會特殊處理
+    crime: 'lastCrime',
     rob: 'lastRob',
     beg: 'lastBeg',
     fish: 'lastFish',
@@ -21,7 +21,7 @@ const COOLDOWN_DURATIONS = {
     work: 60 * 60 * 1000,           // 1 小時
     mine: 35 * 60 * 1000,           // 35 分鐘
     slut: 30 * 60 * 1000,           // 30 分鐘
-    crime: 30 * 60 * 1000,          // 30 分鐘（失敗時）/ 15 分鐘（成功時），這裡用平均值
+    crime: 30 * 60 * 1000,          // 30 分鐘（失敗時）/ 15 分鐘（成功時）
     rob: 2 * 60 * 60 * 1000,        // 2 小時
     beg: 15 * 60 * 1000,            // 15 分鐘
     fish: 35 * 60 * 1000,           // 35 分鐘
@@ -32,7 +32,7 @@ const COOLDOWN_DURATIONS = {
 const COMMAND_DISPLAY = {
     work: { emoji: '💼', name: '工作' },
     mine: { emoji: '⛏️', name: '挖礦' },
-    slut: { emoji: '💋', name: '當 Slut' },
+    slut: { emoji: '💋', name: 'Slut' },
     crime: { emoji: '🔫', name: '犯罪' },
     rob: { emoji: '💰', name: '搶劫' },
     beg: { emoji: '🫴', name: '乞討' },
@@ -59,15 +59,6 @@ export default {
         const guildId = interaction.guildId;
         const isSelf = targetUser.id === interaction.user.id;
 
-        // 🔒 查看他人需要管理員權限
-        if (!isSelf && !interaction.member.permissions.has('Administrator')) {
-            throw createError(
-                "Missing permission",
-                ErrorTypes.PERMISSION,
-                "你沒有權限查看其他玩家的冷卻狀態。此操作僅限管理員。"
-            );
-        }
-
         if (targetUser.bot) {
             throw createError(
                 "Invalid target",
@@ -92,11 +83,10 @@ export default {
 
         // 🔥 檢查是否在監獄中（只影響 crime）
         const isJailed = userData.jailedUntil && userData.jailedUntil > now;
-        let jailRemainingMs = 0;
         let jailStatusText = '';
 
         if (isJailed) {
-            jailRemainingMs = userData.jailedUntil - now;
+            const jailRemainingMs = userData.jailedUntil - now;
             const jailMinutes = Math.ceil(jailRemainingMs / 60000);
             const jailHours = Math.floor(jailMinutes / 60);
             const jailMins = jailMinutes % 60;
@@ -127,7 +117,7 @@ export default {
 
             let statusText;
 
-            // 🔥🔥🔥 只有 crime 會受到監獄影響！ 🔥🔥🔥
+            // 🔥 只有 crime 會受到監獄影響
             if (cmdKey === 'crime' && isJailed) {
                 statusText = jailStatusText;
             } else if (isReady) {
@@ -167,7 +157,6 @@ export default {
         // 生成 Embed
         let description = `共 ${totalCount} 個指令，${readyCount} 個已就緒，${totalCount - readyCount} 個冷卻中`;
 
-        // 🔥 如果入獄，只影響 crime 的提示（在描述中特別說明）
         if (isJailed) {
             description = `🔫 **${targetUser.username} 正在監獄中，無法使用 /crime！**\n${description}`;
         }
@@ -182,7 +171,6 @@ export default {
                 iconURL: interaction.user.displayAvatarURL({ dynamic: true })
             });
 
-        // 將狀態分組為多個字段
         const fields = cooldownStatus.map(c => ({
             name: `${c.emoji} ${c.name}`,
             value: c.status,
