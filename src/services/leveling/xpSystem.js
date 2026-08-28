@@ -28,7 +28,7 @@ export const addXp = wrapServiceBoundary(async function addXp(client, guild, mem
 
     // ⚡ 檢查成員是否有 15% 經驗加成身分組
     if (member && member.roles && member.roles.cache.has(XP_BOOSTER_ROLE_ID)) {
-      xpToAdd = Math.round(xpToAdd * 1.15);
+      xpToAdd = Math.round(xpToAdd * 2);
     }
 
     const levelData = await getUserLevelData(client, guild.id, member.user.id);
