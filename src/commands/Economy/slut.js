@@ -93,9 +93,8 @@ function resolveOutcome(activity, totalWealth) {
     }
 
     if (remainingAfterSuccess < fineChance + robbedChance) {
-        const maxRobbed = Math.min(totalWealth, Math.max(200, Math.floor(totalWealth * 0.35)));
-        const minRobbed = Math.min(maxRobbed, Math.max(75, Math.floor(totalWealth * 0.1)));
-        const amount = maxRobbed > 0 ? randomInt(minRobbed, maxRobbed) : 0;
+        // 搶劫金額固定為 $200 ~ $2,000，完全不受總資產影響
+        const amount = randomInt(200, 2000);
         return {
             type: 'robbed',
             delta: -amount,
