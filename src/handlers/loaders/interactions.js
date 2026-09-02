@@ -29,6 +29,7 @@ export default async (client) => {
   try {
     const interactionsPath = join(__dirname, '../../interactions');
 
+    // ========== 加载所有交互组件 ==========
     for (const type of interactionTypes) {
       const typePath = join(interactionsPath, type);
 
@@ -69,6 +70,55 @@ export default async (client) => {
         }
       }
     }
+
+    // ========== 注册交互事件监听器 ==========
+    client.on('interactionCreate', async (interaction) => {
+      try {
+        // 1. 处理斜杠命令
+        if (interaction.isChatInputCommand()) {
+          const command = client.commands.get(interaction.commandName);
+          if (!command) {
+            return interaction.reply({ content: '❌ 找不到该命令', ephemeral: true });
+          }
+          await command.execute(interaction);
+          return;
+        }
+
+        // 2. 处理按钮
+        if (interaction.isButton()) {
+          const button = client.buttons.get(interaction.customId);
+          if (button) {
+            await button.execute(interaction);
+          }
+          return;
+        }
+
+        // 3. 处理选择菜单（StringSelectMenu）
+        if (interaction.isStringSelectMenu()) {
+          const selectMenu = client.selectMenus.get(interaction.customId);
+          if (selectMenu) {
+            await selectMenu.execute(interaction);
+          }
+          return;
+        }
+
+        // 4. 处理模态框
+        if (interaction.isModalSubmit()) {
+          const modal = client.modals.get(interaction.customId);
+          if (modal) {
+            await modal.execute(interaction);
+          }
+          return;
+        }
+      } catch (error) {
+        logger.error(`交互处理出错:`, error);
+        // 如果交互还未回复，发送错误提示
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({ content: '❌ 执行时发生错误', ephemeral: true });
+        }
+      }
+    });
+
   } catch (error) {
     logger.error('Error loading interactions:', error);
   }
