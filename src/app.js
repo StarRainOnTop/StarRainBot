@@ -43,9 +43,9 @@ class TitanBot extends Client {
     this.cooldowns = new Collection();
     this.db = null;
     this.rest = new REST({ 
-    version: '10',
-    timeout: 60000   // 60 秒超時
-}).setToken(config.bot.token);
+      version: '10',
+      timeout: 60000   // 60 秒超時
+    }).setToken(config.bot.token);
   }
 
   async start() {
@@ -83,6 +83,13 @@ class TitanBot extends Client {
       await this.loadHandlers();
       startupLog('Handlers loaded');
 
+      // ══════════ 新增诊断日志 ══════════
+      startupLog('Handlers loaded successfully, moving to login...');
+      console.log('[DEBUG] About to login...');
+      console.log(`[DEBUG] Token 前10个字符: ${this.config.bot.token?.slice(0, 10)}`);
+      console.log(`[DEBUG] Token 长度: ${this.config.bot.token?.length}`);
+      // ══════════════════════════════════
+
       (async () => {
         try {
           startupLog('Initializing music nodes in background...');
@@ -102,6 +109,8 @@ class TitanBot extends Client {
         startupLog('Discord login successful');
       } catch (loginError) {
         logger.error('❌ 機器人登入失敗 (詳細錯誤):', loginError);
+        // 登录失败时直接退出，避免继续执行注册命令等后续操作
+        process.exit(1);
       }
       
       startupLog('Registering slash commands...');
