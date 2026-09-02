@@ -1,4 +1,4 @@
-import 'dotenv/config';
+﻿import 'dotenv/config';
 import { Client, Collection, GatewayIntentBits } from 'discord.js';
 import { REST } from '@discordjs/rest';
 import express from 'express';
@@ -7,6 +7,7 @@ import cron from 'node-cron';
 import config from './config/application.js';
 import { initializeDatabase } from './utils/database.js';
 import { getGuildConfig } from './services/config/guildConfig.js';
+import { getServerCounters, saveServerCounters, updateCounter } from './services/serverstatsService.js';
 import { logger, startupLog, shutdownLog } from './utils/logger.js';
 import { checkBirthdays } from './services/birthdayService.js';
 import { checkGiveaways } from './services/giveawayService.js';
@@ -14,8 +15,6 @@ import { loadCommands, registerCommands as registerSlashCommands } from './handl
 import { runSafeTask, handleTaskError, ErrorCodes } from './utils/errorHandler.js';
 import { initializeMusic } from './services/music/riffySetup.js';
 import { shutdownMusic } from './services/music/playerHandler.js';
-import { checkDailyReminders } from './services/dailyReminderService.js';
-import { checkExpiredXPBoosters } from './services/xpBoosterService.js';
 import pkg from '../package.json' with { type: 'json' };
 import { EXPECTED_SCHEMA_VERSION, EXPECTED_SCHEMA_LABEL } from './config/database/schemaVersion.js';
 
@@ -23,14 +22,18 @@ class TitanBot extends Client {
   constructor() {
     super({
       intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMembers,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.GuildMessageReactions,
-        GatewayIntentBits.MessageContent,
+        
+        GatewayIntentBits.Guilds,                        
+        GatewayIntentBits.GuildMembers,                 
+
+        GatewayIntentBits.GuildMessages,                
+        GatewayIntentBits.GuildMessageReactions,        
+        GatewayIntentBits.MessageContent,               
         GatewayIntentBits.DirectMessages,
-        GatewayIntentBits.GuildVoiceStates,
-        GatewayIntentBits.GuildBans,
+
+        GatewayIntentBits.GuildVoiceStates,             
+
+        GatewayIntentBits.GuildBans,                    
       ],
     });
 
@@ -42,10 +45,7 @@ class TitanBot extends Client {
     this.modals = new Collection();
     this.cooldowns = new Collection();
     this.db = null;
-    this.rest = new REST({ 
-      version: '10',
-      timeout: 60000   // 60 秒超時
-    }).setToken(config.bot.token);
+    this.rest = new REST({ version: '10' }).setToken(config.bot.token);
   }
 
   async start() {
@@ -57,6 +57,7 @@ class TitanBot extends Client {
       const dbInstance = await initializeDatabase();
       this.db = dbInstance.db;
 
+      // Check database status and report
       const dbStatus = this.db.getStatus();
       if (dbStatus.isDegraded) {
         logger.warn('');
@@ -64,8 +65,8 @@ class TitanBot extends Client {
         logger.warn('║ ⚠️  DATABASE RUNNING IN DEGRADED MODE                 ║');
         logger.warn('║                                                       ║');
         logger.warn('║ Connection: In-Memory Storage (PostgreSQL unavailable)║');
-        logger.warn('║ Data Persistence: DISABLED - data lost on restart     ║');
-        logger.warn('║ Action Required: Fix PostgreSQL and restart bot       ║');
+        logger.warn('║ Data Persistence: DISABLED - data lost on restart    ║');
+        logger.warn('║ Action Required: Fix PostgreSQL and restart bot      ║');
         logger.warn('╚═══════════════════════════════════════════════════════╝');
         logger.warn('');
       } else {
@@ -83,37 +84,13 @@ class TitanBot extends Client {
       await this.loadHandlers();
       startupLog('Handlers loaded');
 
-      // ══════════ 新增诊断日志 ══════════
-      startupLog('Handlers loaded successfully, moving to login...');
-      console.log('[DEBUG] About to login...');
-      console.log(`[DEBUG] Token 前10个字符: ${this.config.bot.token?.slice(0, 10)}`);
-      console.log(`[DEBUG] Token 长度: ${this.config.bot.token?.length}`);
-      // ══════════════════════════════════
-
-      (async () => {
-        try {
-          startupLog('Initializing music nodes in background...');
-          await initializeMusic(this);
-        } catch (musicErr) {
-          logger.warn('⚠️ Music initialization warning (non-fatal):', musicErr.message);
-        }
-      })();
+      initializeMusic(this);
       
       startupLog('Logging into Discord...');
+      await this.login(this.config.bot.token);
+      startupLog('Discord login successful');
       
-      console.log(`[DEBUG] Token 狀態: ${this.config.bot.token ? "✅ 已讀取 (長度: " + this.config.bot.token.length + ")" : "❌ 空的！請檢查環境變數"}`);
-      this.on('debug', (info) => console.log(`[DISCORD DEBUG] ${info}`));
-
-      try {
-        await this.login(this.config.bot.token);
-        startupLog('Discord login successful');
-      } catch (loginError) {
-        logger.error('❌ 機器人登入失敗 (詳細錯誤):', loginError);
-        // 登录失败时直接退出，避免继续执行注册命令等后续操作
-        process.exit(1);
-      }
-      
-      startupLog('Registering slash commands...');
+      startupLog('Registering slash commands globally...');
       await this.registerCommands();
       startupLog('Slash commands registration complete');
       
@@ -271,17 +248,46 @@ class TitanBot extends Client {
   }
 
   setupCronJobs() {
-    // 每天 06:00 檢查生日
     cron.schedule('0 6 * * *', runSafeTask('birthday_check', () => checkBirthdays(this)));
-
-    // 每分鐘檢查抽獎
     cron.schedule('* * * * *', runSafeTask('giveaway_check', () => checkGiveaways(this)));
+    cron.schedule('*/15 * * * *', runSafeTask('counter_update', () => this.updateAllCounters()));
+  }
 
-    // ⏰ 每分鐘檢查每日獎勵提醒
-    cron.schedule('* * * * *', runSafeTask('daily_reminder_check', () => checkDailyReminders(this)));
-
-    // ⏰ 每分鐘檢查 XP 加成到期
-    cron.schedule('* * * * *', runSafeTask('xp_booster_check', () => checkExpiredXPBoosters(this)));
+  async updateAllCounters() {
+    if (!this.db) {
+      logger.warn('Database not available for counter updates');
+      return;
+    }
+    
+    for (const [guildId, guild] of this.guilds.cache) {
+      try {
+        const counters = await getServerCounters(this, guildId);
+        const validCounters = [];
+        const orphanedCounters = [];
+        
+        for (const counter of counters) {
+          if (counter && counter.type && counter.channelId && counter.enabled !== false) {
+            const channel = guild.channels.cache.get(counter.channelId);
+            if (channel) {
+              validCounters.push(counter);
+              await updateCounter(this, guild, counter);
+            } else {
+              orphanedCounters.push(counter);
+              logger.info(`Removing orphaned counter ${counter.id} (type: ${counter.type}, deleted channel: ${counter.channelId}) from guild ${guildId}`);
+            }
+          }
+        }
+        
+        // Save cleaned counters if any were orphaned
+        // Save cleaned counters if any were orphaned
+        if (orphanedCounters.length > 0) {
+          await saveServerCounters(this, guildId, validCounters);
+          logger.info(`Cleaned up ${orphanedCounters.length} orphaned counter(s) from guild ${guildId} during scheduled update`);
+        }
+      } catch (error) {
+        logger.error(`Error updating counters for guild ${guildId}:`, error);
+      }
+    }
   }
 
   async loadHandlers() {
@@ -316,45 +322,11 @@ class TitanBot extends Client {
     }
   }
 
-  // ✅ MODIFIED registerCommands method
   async registerCommands() {
     try {
-      const clientId = this.config.bot.clientId;
-      const guildId = process.env.GUILD_ID || this.config.bot.guildId;
-
-      if (!clientId) {
-        logger.error('❌ CLIENT_ID 未設置，無法註冊斜線命令。');
-        return;
-      }
-
-      // 判斷使用伺服器命令還是全域命令
-      const isGuild = Boolean(guildId);
-      const baseUrl = isGuild
-        ? `/applications/${clientId}/guilds/${guildId}/commands`
-        : `/applications/${clientId}/commands`;
-
-      logger.info(`🗑️ 正在清除${isGuild ? '伺服器' : '全域'}的所有舊命令...`);
-
-      // 1. 取得目前所有已存在的命令
-      const existingCommands = await this.rest.get(baseUrl);
-
-      // 2. 刪除所有舊命令
-      for (const cmd of existingCommands) {
-        await this.rest.delete(`${baseUrl}/${cmd.id}`);
-        console.log(`已刪除舊命令：${cmd.name} (${cmd.id})`);
-      }
-
-      logger.info('✅ 舊命令已全部清除，開始註冊新命令...');
-
-      // 3. 重新註冊所有命令（包括新的 withdraw）
-      await registerSlashCommands(this, {
-        clientId,
-        guildId: isGuild ? guildId : null,
-      });
-
-      logger.info('✅ 新命令註冊完成');
+      await registerSlashCommands(this, { clientId: this.config.bot.clientId });
     } catch (error) {
-      logger.error('❌ 重置斜線命令失敗:', error);
+      logger.error('Error registering commands:', error);
     }
   }
 
@@ -365,6 +337,7 @@ class TitanBot extends Client {
     logger.info(`${'='.repeat(60)}`);
 
     try {
+      
       logger.info('Stopping cron jobs...');
       cron.getTasks().forEach(task => task.stop());
       logger.info('✅ Cron jobs stopped');
@@ -379,6 +352,8 @@ class TitanBot extends Client {
         logger.info('✅ Web server closed');
       }
 
+      // Close database connection
+      // Close database connection
       if (this.db && this.db.db) {
         logger.info('Closing database connection...');
         try {
@@ -397,12 +372,13 @@ class TitanBot extends Client {
           this.destroy();
           logger.info('✅ Discord client destroyed');
         } catch (error) {
+
           logger.warn('Discord client destroy warning (non-critical):', error.message);
         }
       }
 
       logger.info('✅ Graceful shutdown complete');
-      shutdownLog('Bot stopped successfully.');
+  shutdownLog('Bot stopped successfully.');
       process.exit(0);
     } catch (error) {
       logger.error('Error during graceful shutdown:', error);
@@ -419,6 +395,7 @@ try {
     process.on('SIGINT', () => bot.shutdown('SIGINT'));
     
     process.on('uncaughtException', (error) => {
+      // Process state may be corrupt after an uncaught throw; log and shut down cleanly.
       handleTaskError('uncaught_exception', error, { fatal: true });
       bot.shutdown('UNCAUGHT_EXCEPTION');
     });
@@ -433,6 +410,8 @@ try {
         return;
       }
 
+      // A stray rejection is a bug to fix, not a reason to take the bot down.
+      // Log loudly with full context; the central task handler categorizes it.
       handleTaskError('unhandled_rejection', reason instanceof Error ? reason : new Error(String(reason)), {
         errorCode: ErrorCodes.UNHANDLED_REJECTION,
       });
