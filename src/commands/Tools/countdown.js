@@ -18,7 +18,7 @@ export default {
                 .setDescription("倒數的分鐘數 (0-1440)")
                 .setMinValue(0)
                 .setMaxValue(1440)
-                .setRequired(false),
+                .setRequired(false)
         )
         .addIntegerOption((option) =>
             option
@@ -26,13 +26,13 @@ export default {
                 .setDescription("倒數的秒數 (0-59)")
                 .setMinValue(0)
                 .setMaxValue(59)
-                .setRequired(false),
+                .setRequired(false)
         )
         .addStringOption((option) =>
             option
                 .setName("title")
                 .setDescription("倒數計時器的選填標題")
-                .setRequired(false),
+                .setRequired(false)
         ),
 
     async execute(interaction) {
@@ -67,7 +67,7 @@ export default {
 
         const initialEmbed = successEmbed(
             `⏱️ ${title}`,
-            `剩餘時間：**${formatTime(totalSeconds)}**`,
+            `剩餘時間：**${formatTime(totalSeconds)}**`
         );
 
         const message = await interaction.channel.send({
