@@ -11,7 +11,7 @@ export const botConfig = {
   // - "invisible" = appears offline
   presence: {
     // Current online state shown on Discord.
-    status: "Hello!!!",
+    status: "online",
 
     // Activity lines shown under the bot name.
     // `type` number mapping from Discord:
@@ -23,9 +23,9 @@ export const botConfig = {
     // 5 = Competing
     activities: [
       {
-        name: ":heart:", // required by Discord API, not shown in the client
-        state: "正在跟星雨玩床戰",   // this is what people actually see
-        type: 0,               // Custom
+        name: "Custom Status", // required by Discord API, not shown in the client
+        state: "stalking",     // this is what people actually see
+        type: 4,               // Custom
       },
     ],
   },
@@ -42,7 +42,7 @@ export const botConfig = {
     defaultCooldown: 3,
 
     // If true, old commands are removed before re-registering.
-    deleteCommands: true,
+    deleteCommands: false,
 
     // Optional server ID retained for tutorial compatibility; not used for command registration.
     testGuildId: process.env.TEST_GUILD_ID,
@@ -182,8 +182,8 @@ export const botConfig = {
     workMax: 100,
 
     // Beg command random payout range.
-    begMin: 100,
-    begMax: 300,
+    begMin: 5,
+    begMax: 50,
 
     // Command cooldowns (milliseconds).
     cooldowns: {
