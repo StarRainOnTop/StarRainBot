@@ -60,6 +60,9 @@ export default {
 
         if (interaction.isChatInputCommand()) {
           try {
+            // ✅ 关键修复：先延迟回复，防止3秒超时导致“应用程序未响应”
+            await interaction.deferReply().catch(() => {});
+
             logger.info(`Command executed: /${interaction.commandName} by ${interaction.user.tag}`, {
               event: 'interaction.command.received',
               traceId: interactionTraceContext.traceId,
