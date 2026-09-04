@@ -73,6 +73,29 @@ export default async (client) => {
 
     // ========== 注册交互事件监听器 ==========
     client.on('interactionCreate', async (interaction) => {
+      // 模态框 (Modal) 弹出前不能 defer，直接跳过
+      if (interaction.isModalSubmit()) {
+        try {
+          const modal = client.modals.get(interaction.customId);
+          if (modal) await modal.execute(interaction);
+        } catch (error) {
+          logger.error(`Modal 处理出错:`, error);
+          if (!interaction.replied && !interaction.deferred) {
+            await interaction.reply({ content: '❌ 执行时发生错误', ephemeral: true }).catch(() => {});
+          }
+        }
+        return;
+      }
+
+      // 自动修复：拦截 interaction.reply 自动转为 editReply / followUp
+      const originalReply = interaction.reply.bind(interaction);
+      interaction.reply = async (options) => {
+        if (interaction.deferred || interaction.replied) {
+          return await interaction.editReply(options);
+        }
+        return await originalReply(options);
+      };
+
       try {
         // 1. 处理斜杠命令
         if (interaction.isChatInputCommand()) {
@@ -80,6 +103,12 @@ export default async (client) => {
           if (!command) {
             return interaction.reply({ content: '❌ 找不到该命令', ephemeral: true });
           }
+
+          // 核心拦截：0.1 秒内向 Discord 发送延时，解决 3 秒超时限制
+          if (!interaction.deferred && !interaction.replied) {
+            await interaction.deferReply().catch(() => {});
+          }
+
           await command.execute(interaction);
           return;
         }
@@ -88,6 +117,10 @@ export default async (client) => {
         if (interaction.isButton()) {
           const button = client.buttons.get(interaction.customId);
           if (button) {
+            // 核心拦截：按钮点击先默认延时确认
+            if (!interaction.deferred && !interaction.replied) {
+              await interaction.deferUpdate().catch(() => {});
+            }
             await button.execute(interaction);
           }
           return;
@@ -97,24 +130,19 @@ export default async (client) => {
         if (interaction.isStringSelectMenu()) {
           const selectMenu = client.selectMenus.get(interaction.customId);
           if (selectMenu) {
+            if (!interaction.deferred && !interaction.replied) {
+              await interaction.deferUpdate().catch(() => {});
+            }
             await selectMenu.execute(interaction);
-          }
-          return;
-        }
-
-        // 4. 处理模态框
-        if (interaction.isModalSubmit()) {
-          const modal = client.modals.get(interaction.customId);
-          if (modal) {
-            await modal.execute(interaction);
           }
           return;
         }
       } catch (error) {
         logger.error(`交互处理出错:`, error);
-        // 如果交互还未回复，发送错误提示
-        if (!interaction.replied && !interaction.deferred) {
-          await interaction.reply({ content: '❌ 执行时发生错误', ephemeral: true });
+        if (interaction.deferred) {
+          await interaction.editReply({ content: '❌ 执行时发生错误' }).catch(() => {});
+        } else if (!interaction.replied) {
+          await interaction.reply({ content: '❌ 执行时发生错误', ephemeral: true }).catch(() => {});
         }
       }
     });
