@@ -94,19 +94,20 @@ class TitanBot extends Client {
 
       startupLog('Logging into Discord...');
       
-      // ✅ 登录加入超时保护与错误处理
+// ✅ 登录加入超时保护与错误处理
       try {
         await Promise.race([
           this.login(this.config.bot.token),
           new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('登录超时（30秒）')), 30000)
+            // 將超時時間從 30000 改為 120000 (120秒)
+            setTimeout(() => reject(new Error('登录超时（120秒）')), 120000)
           ),
         ]);
         startupLog('Discord login successful');
       } catch (loginError) {
         logger.error('❌ 机器人登录失败:', loginError);
         if (loginError.message?.includes('超时')) {
-          logger.error('登录超时，可能是网络问题或 Token 无效');
+          logger.error('登录超时，Render 伺服器啟動太慢或網路延遲');
         }
         process.exit(1);
       }
