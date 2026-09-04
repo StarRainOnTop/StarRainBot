@@ -46,6 +46,7 @@ class TitanBot extends Client {
 
   async start() {
     try {
+      this.on('debug', console.log);
       startupLog('Starting TitanBot...');
       await new Promise(resolve => setTimeout(resolve, 1000));
 
