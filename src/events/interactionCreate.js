@@ -53,6 +53,9 @@ export default {
     interaction.traceContext = interactionTraceContext;
     interaction.traceId = interactionTraceContext.traceId;
 
+    // ✅ 使用 interaction.client 作为可靠的 client 引用
+    const botClient = interaction.client;
+
     return runWithTraceContext(interactionTraceContext, async () => {
       try {
         InteractionHelper.patchInteractionResponses(interaction);
@@ -76,7 +79,7 @@ export default {
               commandName: interaction.commandName
             }, interactionTraceContext));
 
-            const command = client.commands.get(interaction.commandName);
+            const command = botClient.commands.get(interaction.commandName);
 
             if (!command) {
               throw createError(
@@ -108,7 +111,7 @@ export default {
             const defaultCooldownSec = Number(botConfig.commands?.defaultCooldown) || 0;
             if (defaultCooldownSec > 0 && !isBotOwner(interaction.user.id)) {
               const cooldownKey = `${interaction.user.id}:${interaction.commandName}`;
-              const expiresAt = client.cooldowns.get(cooldownKey);
+              const expiresAt = botClient.cooldowns.get(cooldownKey);
 
               if (expiresAt && Date.now() < expiresAt) {
                 const remainingSec = Math.ceil((expiresAt - Date.now()) / 1000);
@@ -120,7 +123,7 @@ export default {
                 );
               }
 
-              client.cooldowns.set(cooldownKey, Date.now() + defaultCooldownSec * 1000);
+              botClient.cooldowns.set(cooldownKey, Date.now() + defaultCooldownSec * 1000);
             }
 
             const abuseProtection = await enforceAbuseProtection(interaction, command, interaction.commandName);
@@ -143,9 +146,9 @@ export default {
 
             let guildConfig = null;
             if (interaction.guild) {
-              guildConfig = await getGuildConfig(client, interaction.guild.id, interactionTraceContext);
+              guildConfig = await getGuildConfig(botClient, interaction.guild.id, interactionTraceContext);
               const accessKey = resolveSlashAccessKey(interaction);
-              if (!(await isCommandEnabled(client, interaction.guild.id, accessKey, command.category))) {
+              if (!(await isCommandEnabled(botClient, interaction.guild.id, accessKey, command.category))) {
                 throw createError(
                   `Command ${accessKey} is disabled in this guild`,
                   ErrorTypes.CONFIGURATION,
@@ -163,7 +166,8 @@ export default {
               return;
             }
 
-            await command.execute(interaction, guildConfig, client);
+            // ✅ 关键：把有效的 client 传给命令
+            await command.execute(interaction, guildConfig, botClient);
           } catch (error) {
             await handleInteractionError(interaction, error, withTraceContext({
               type: 'command',
@@ -172,10 +176,10 @@ export default {
             }, interactionTraceContext));
           }
         } else if (interaction.isAutocomplete()) {
-          const autocompleteCommand = client.commands.get(interaction.commandName);
+          const autocompleteCommand = botClient.commands.get(interaction.commandName);
           if (autocompleteCommand?.autocomplete) {
             try {
-              await autocompleteCommand.autocomplete(interaction, client);
+              await autocompleteCommand.autocomplete(interaction, botClient);
             } catch (error) {
               logger.error('Error handling command autocomplete:', {
                 error: error.message,
@@ -192,7 +196,7 @@ export default {
           if (interaction.commandName === 'apply' && focusedOption.name === 'application') {
             try {
               const { getApplicationRoles } = await import('../utils/database.js');
-              const roles = await getApplicationRoles(client, interaction.guildId);
+              const roles = await getApplicationRoles(botClient, interaction.guildId);
               const roleName = interaction.options.getString('application', false);
 
               const filtered = roles.filter(role =>
@@ -217,7 +221,7 @@ export default {
           } else if (interaction.commandName === 'app-admin' && focusedOption.name === 'application') {
             try {
               const { getApplicationRoles } = await import('../utils/database.js');
-              const roles = await getApplicationRoles(client, interaction.guildId);
+              const roles = await getApplicationRoles(botClient, interaction.guildId);
               const appName = interaction.options.getString('application', false);
 
               const filtered = roles.filter(role =>
@@ -244,7 +248,7 @@ export default {
               const guildId = interaction.guildId;
               const guild = interaction.guild;
               
-              let panels = await getAllReactionRoleMessages(client, guildId);
+              let panels = await getAllReactionRoleMessages(botClient, guildId);
               
               if (!panels || panels.length === 0) {
                 await interaction.respond([]);
@@ -259,13 +263,13 @@ export default {
                 
                 const channel = guild.channels.cache.get(panel.channelId);
                 if (!channel) {
-                  await deleteReactionRoleMessage(client, guildId, panel.messageId).catch(() => {});
+                  await deleteReactionRoleMessage(botClient, guildId, panel.messageId).catch(() => {});
                   continue;
                 }
                 
                 const msg = await channel.messages.fetch(panel.messageId).catch(() => null);
                 if (!msg) {
-                  await deleteReactionRoleMessage(client, guildId, panel.messageId).catch(() => {});
+                  await deleteReactionRoleMessage(botClient, guildId, panel.messageId).catch(() => {});
                   continue;
                 }
                 validPanels.push(panel);
@@ -314,11 +318,11 @@ export default {
             const parts = interaction.customId.split('_');
             const buttonType = parts.slice(0, 3).join('_');
             const listId = parts[3];
-            const button = client.buttons.get(buttonType);
+            const button = botClient.buttons.get(buttonType);
 
             if (button) {
               try {
-                await button.execute(interaction, client, [listId]);
+                await button.execute(interaction, botClient, [listId]);
               } catch (error) {
                 await handleInteractionError(interaction, error, withTraceContext({
                   type: 'button',
@@ -338,7 +342,7 @@ export default {
           }
 
           const [customId, ...args] = interaction.customId.split(':');
-          const button = client.buttons.get(customId);
+          const button = botClient.buttons.get(customId);
 
           if (!button) {
             if (!interaction.customId.includes(':') || isCollectorManagedComponent(customId)) {
@@ -354,7 +358,7 @@ export default {
           }
 
           try {
-            await button.execute(interaction, client, args);
+            await button.execute(interaction, botClient, args);
           } catch (error) {
             await handleInteractionError(interaction, error, withTraceContext({
               type: 'button',
@@ -364,7 +368,7 @@ export default {
           }
         } else if (interaction.isStringSelectMenu()) {
           const [customId, ...args] = interaction.customId.split(':');
-          const selectMenu = client.selectMenus.get(customId);
+          const selectMenu = botClient.selectMenus.get(customId);
 
           if (!selectMenu) {
             if (!interaction.customId.includes(':') || isCollectorManagedComponent(customId)) {
@@ -380,7 +384,7 @@ export default {
           }
 
           try {
-            await selectMenu.execute(interaction, client, args);
+            await selectMenu.execute(interaction, botClient, args);
           } catch (error) {
             await handleInteractionError(interaction, error, withTraceContext({
               type: 'select_menu',
@@ -416,11 +420,10 @@ export default {
           }
 
           const [customId, ...args] = interaction.customId.split(':');
-          const modal = client.modals.get(customId);
+          const modal = botClient.modals.get(customId);
 
           if (!modal) {
             if (!interaction.customId.includes(':')) {
-
               return;
             }
 
@@ -433,7 +436,7 @@ export default {
           }
 
           try {
-            await modal.execute(interaction, client, args);
+            await modal.execute(interaction, botClient, args);
           } catch (error) {
             await handleInteractionError(interaction, error, withTraceContext({
               type: 'modal',
