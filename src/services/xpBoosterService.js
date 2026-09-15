@@ -1,33 +1,36 @@
 // src/services/xpBoosterService.js
 import { logger } from '../utils/logger.js';
 import { getEconomyData, setEconomyData } from '../utils/economy.js';
+import { getEconomyKey } from '../utils/database.js';
 
 const XP_BOOSTER_ROLE_ID = '1540410469406220358';
 
 export async function checkExpiredXPBoosters(client) {
     const now = Date.now();
-    let rows;
 
+    let allKeys;
     try {
-        const result = await client.db.query(
-            `SELECT guild_id, user_id
-             FROM economy
-             WHERE (data->>'xpBoosterExpiresAt') IS NOT NULL
-               AND (data->>'xpBoosterExpiresAt')::bigint <= $1`,
-            [now]
-        );
-        rows = result.rows;
+        allKeys = await client.db.list('guild:');
     } catch (err) {
-        logger.error('Failed to query expired XP boosters:', err);
+        logger.error('Failed to list keys for XP booster check:', err);
         return;
     }
 
-    for (const row of rows) {
-        const guildId = row.guild_id;
-        const userId = row.user_id;
+    if (!Array.isArray(allKeys)) return;
+
+    const economyKeys = allKeys.filter(key => key.includes(':economy:'));
+
+    for (const key of economyKeys) {
+        const parts = key.split(':');
+        if (parts.length < 4 || parts[0] !== 'guild' || parts[2] !== 'economy') continue;
+
+        const guildId = parts[1];
+        const userId = parts[3];
 
         const userData = await getEconomyData(client, guildId, userId);
         if (!userData) continue;
+
+        if (!userData.xpBoosterExpiresAt || now < userData.xpBoosterExpiresAt) continue;
 
         try {
             const guild = client.guilds.cache.get(guildId);
