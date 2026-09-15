@@ -5,6 +5,7 @@ import { createEmbed } from '../utils/embeds.js';
 
 export async function checkDailyReminders(client) {
     const now = Date.now();
+    logger.info('[DAILY] checkDailyReminders started');
 
     let allKeys;
     try {
@@ -14,9 +15,15 @@ export async function checkDailyReminders(client) {
         return;
     }
 
-    if (!Array.isArray(allKeys)) return;
+    logger.info(`[DAILY] client.db.list('guild:') returned ${allKeys?.length ?? 0} keys`);
+
+    if (!Array.isArray(allKeys)) {
+        logger.warn('[DAILY] allKeys is not an array');
+        return;
+    }
 
     const economyKeys = allKeys.filter(key => key.includes(':economy:'));
+    logger.info(`[DAILY] economy keys found: ${economyKeys.length}`);
 
     for (const key of economyKeys) {
         const parts = key.split(':');
@@ -28,9 +35,11 @@ export async function checkDailyReminders(client) {
         const userData = await getEconomyData(client, guildId, userId);
         if (!userData) continue;
 
-        if (!userData.nextReminderAt || now < userData.nextReminderAt || userData.reminderSent) {
-            continue;
-        }
+        logger.info(`[DAILY] user ${userId} nextReminderAt: ${userData.nextReminderAt}, reminderSent: ${userData.reminderSent}`);
+
+        if (!userData.nextReminderAt || now < userData.nextReminderAt || userData.reminderSent) continue;
+
+        logger.info(`[DAILY] Sending DM to ${userId} in guild ${guildId}`);
 
         try {
             const user = await client.users.fetch(userId).catch(() => null);
@@ -60,4 +69,6 @@ export async function checkDailyReminders(client) {
             await setEconomyData(client, guildId, userId, userData).catch(() => {});
         }
     }
+
+    logger.info('[DAILY] checkDailyReminders finished');
 }
