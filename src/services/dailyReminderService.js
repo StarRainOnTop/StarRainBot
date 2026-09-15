@@ -5,29 +5,32 @@ import { createEmbed } from '../utils/embeds.js';
 
 export async function checkDailyReminders(client) {
     const now = Date.now();
-    let rows;
 
+    let allKeys;
     try {
-        const result = await client.db.query(
-            `SELECT guild_id, user_id
-             FROM economy
-             WHERE (data->>'nextReminderAt') IS NOT NULL
-               AND (data->>'nextReminderAt')::bigint <= $1
-               AND (data->>'reminderSent')::boolean IS NOT TRUE`,
-            [now]
-        );
-        rows = result.rows;
+        allKeys = await client.db.list('guild:');
     } catch (err) {
-        logger.error('Failed to query daily reminders:', err);
+        logger.error('Failed to list keys for daily reminder check:', err);
         return;
     }
 
-    for (const row of rows) {
-        const guildId = row.guild_id;
-        const userId = row.user_id;
+    if (!Array.isArray(allKeys)) return;
+
+    const economyKeys = allKeys.filter(key => key.includes(':economy:'));
+
+    for (const key of economyKeys) {
+        const parts = key.split(':');
+        if (parts.length < 4 || parts[0] !== 'guild' || parts[2] !== 'economy') continue;
+
+        const guildId = parts[1];
+        const userId = parts[3];
 
         const userData = await getEconomyData(client, guildId, userId);
         if (!userData) continue;
+
+        if (!userData.nextReminderAt || now < userData.nextReminderAt || userData.reminderSent) {
+            continue;
+        }
 
         try {
             const user = await client.users.fetch(userId).catch(() => null);
