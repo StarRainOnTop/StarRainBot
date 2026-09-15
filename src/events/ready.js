@@ -5,8 +5,6 @@ import { reconcileReactionRoleMessages } from "../services/reactionRoleService.j
 import { reconcileTicketPanels, reconcileVerificationPanels, reconcileReactionRolePanelHealth } from "../services/panelHealthService.js";
 import { reconcileLevelRoles } from "../services/leveling/levelRoleSyncService.js";
 import { initRiffyAfterReady } from "../services/music/riffySetup.js";
-import { checkExpiredXPBoosters } from "../services/xpBoosterService.js";
-import { checkDailyReminders } from "../services/dailyReminderService.js";
 
 export default {
   name: Events.ClientReady,
@@ -48,29 +46,6 @@ export default {
       startupLog(
         `Level role sync: scanned ${levelRoleSummary.scannedGuilds} guilds, pruned ${levelRoleSummary.prunedRewardEntries} stale rewards, re-awarded ${levelRoleSummary.rolesReAwarded} roles, errors ${levelRoleSummary.errors}`
       );
-
-      // ⚡ 經驗加成身分組過期檢查：啟動時先跑一次
-      await checkExpiredXPBoosters(client).catch(err =>
-        logger.error("XP booster check failed on startup:", err)
-      );
-
-      // ⏰ 每日獎勵提醒檢查：啟動時先跑一次
-      await checkDailyReminders(client).catch(err =>
-        logger.error("Daily reminder check failed on startup:", err)
-      );
-
-      // 每 60 秒定期檢查一次（XP 加成 + 每日提醒）
-      setInterval(() => {
-        checkExpiredXPBoosters(client).catch(err =>
-          logger.error("XP booster check failed:", err)
-        );
-        checkDailyReminders(client).catch(err =>
-          logger.error("Daily reminder check failed:", err)
-        );
-      }, 60_000);
-
-      startupLog("XP booster expiry checker started (interval: 60s)");
-      startupLog("Daily reminder checker started (interval: 60s)");
     } catch (error) {
       logger.error("Error in ready event:", error);
     }
