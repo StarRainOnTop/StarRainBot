@@ -1,3 +1,8 @@
+logger.info(`[XP] client.db constructor: ${client.db?.constructor?.name}`);
+logger.info(`[XP] client.db.db constructor: ${client.db?.db?.constructor?.name}`);
+logger.info(`[XP] client.db.db keys: ${Object.keys(client.db?.db || {}).join(', ')}`);
+logger.info(`[XP] client.db.db.pool: ${!!client.db?.db?.pool}`);
+logger.info(`[XP] client.db.pool: ${!!client.db?.pool}`);
 // src/services/xpBoosterService.js
 import { logger } from '../utils/logger.js';
 import { getEconomyData, setEconomyData } from '../utils/economy.js';
