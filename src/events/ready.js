@@ -5,6 +5,7 @@ import { reconcileReactionRoleMessages } from "../services/reactionRoleService.j
 import { reconcileTicketPanels, reconcileVerificationPanels, reconcileReactionRolePanelHealth } from "../services/panelHealthService.js";
 import { reconcileLevelRoles } from "../services/leveling/levelRoleSyncService.js";
 import { initRiffyAfterReady } from "../services/music/riffySetup.js";
+import { checkExpiredXPBoosters } from "../services/xpBoosterService.js";
 
 export default {
   name: Events.ClientReady,
@@ -46,6 +47,19 @@ export default {
       startupLog(
         `Level role sync: scanned ${levelRoleSummary.scannedGuilds} guilds, pruned ${levelRoleSummary.prunedRewardEntries} stale rewards, re-awarded ${levelRoleSummary.rolesReAwarded} roles, errors ${levelRoleSummary.errors}`
       );
+
+      // ⚡ 經驗加成身分組過期檢查：啟動時先跑一次，之後每 60 秒檢查一次
+      await checkExpiredXPBoosters(client).catch(err =>
+        logger.error("XP booster check failed on startup:", err)
+      );
+
+      setInterval(() => {
+        checkExpiredXPBoosters(client).catch(err =>
+          logger.error("XP booster check failed:", err)
+        );
+      }, 60_000);
+
+      startupLog("XP booster expiry checker started (interval: 60s)");
     } catch (error) {
       logger.error("Error in ready event:", error);
     }
