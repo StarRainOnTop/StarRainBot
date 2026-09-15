@@ -9,7 +9,7 @@ export async function checkDailyReminders(client) {
 
     let rows;
     try {
-        const result = await client.db.pool.query(
+        const result = await client.db.db.pool.query(
             `SELECT guild_id, user_id
              FROM economy
              WHERE (data->>'nextReminderAt') IS NOT NULL
