@@ -8,40 +8,29 @@ export async function checkExpiredXPBoosters(client) {
     const now = Date.now();
     logger.info('[XP] checkExpiredXPBoosters started');
 
-    let allKeys;
+    let rows;
     try {
-        allKeys = await client.db.list('guild:');
+        const result = await client.db.pool.query(
+            `SELECT guild_id, user_id
+             FROM economy
+             WHERE (data->>'xpBoosterExpiresAt') IS NOT NULL
+               AND (data->>'xpBoosterExpiresAt')::bigint <= $1`,
+            [now]
+        );
+        rows = result.rows;
     } catch (err) {
-        logger.error('Failed to list keys for XP booster check:', err);
+        logger.error('[XP] Failed to query expired XP boosters:', err);
         return;
     }
 
-    logger.info(`[XP] client.db.list('guild:') returned ${allKeys?.length ?? 0} keys`);
-    logger.info(`[XP] Sample keys: ${JSON.stringify((allKeys || []).slice(0, 5))}`);
+    logger.info(`[XP] Found ${rows.length} expired XP boosters`);
 
-    if (!Array.isArray(allKeys)) {
-        logger.warn('[XP] allKeys is not an array');
-        return;
-    }
-
-    const economyKeys = allKeys.filter(key => key.includes(':economy:'));
-    logger.info(`[XP] economy keys found: ${economyKeys.length}`);
-
-    for (const key of economyKeys) {
-        const parts = key.split(':');
-        if (parts.length < 4 || parts[0] !== 'guild' || parts[2] !== 'economy') continue;
-
-        const guildId = parts[1];
-        const userId = parts[3];
+    for (const row of rows) {
+        const guildId = row.guild_id;
+        const userId = row.user_id;
 
         const userData = await getEconomyData(client, guildId, userId);
         if (!userData) continue;
-
-        logger.info(`[XP] user ${userId} in guild ${guildId} expires at: ${userData.xpBoosterExpiresAt}`);
-
-        if (!userData.xpBoosterExpiresAt || now < userData.xpBoosterExpiresAt) continue;
-
-        logger.info(`[XP] EXPIRED! Processing user ${userId} in guild ${guildId}`);
 
         try {
             const guild = client.guilds.cache.get(guildId);
