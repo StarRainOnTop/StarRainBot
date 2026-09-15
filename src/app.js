@@ -278,6 +278,7 @@ setupCronJobs() {
     cron.schedule('* * * * *', runSafeTask('giveaway_check', () => checkGiveaways(this)));
     cron.schedule('*/15 * * * *', runSafeTask('counter_update', () => this.updateAllCounters()));
     cron.schedule('* * * * *', runSafeTask('daily_reminder_check', () => checkDailyReminders(this)));
+    cron.schedule('* * * * *', runSafeTask('xp_booster_check', () => checkExpiredXPBoosters(this)));
 }
 
   async updateAllCounters() {
