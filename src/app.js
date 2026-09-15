@@ -4,6 +4,8 @@ import { REST } from '@discordjs/rest';
 import express from 'express';
 import cron from 'node-cron';
 
+import { checkDailyReminders } from './services/dailyReminderService.js';
+import { checkExpiredXPBoosters } from './services/xpBoosterService.js';
 import config from './config/application.js';
 import { initializeDatabase } from './utils/database.js';
 import { getGuildConfig } from './services/config/guildConfig.js';
