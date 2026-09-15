@@ -1,8 +1,3 @@
-logger.info(`[XP] client.db constructor: ${client.db?.constructor?.name}`);
-logger.info(`[XP] client.db.db constructor: ${client.db?.db?.constructor?.name}`);
-logger.info(`[XP] client.db.db keys: ${Object.keys(client.db?.db || {}).join(', ')}`);
-logger.info(`[XP] client.db.db.pool: ${!!client.db?.db?.pool}`);
-logger.info(`[XP] client.db.pool: ${!!client.db?.pool}`);
 // src/services/xpBoosterService.js
 import { logger } from '../utils/logger.js';
 import { getEconomyData, setEconomyData } from '../utils/economy.js';
@@ -13,9 +8,16 @@ export async function checkExpiredXPBoosters(client) {
     const now = Date.now();
     logger.info('[XP] checkExpiredXPBoosters started');
 
+    // ✅ 這幾行要在函式內部，才能每次 cron 觸發時都印出來
+    logger.info(`[XP] client.db constructor: ${client.db?.constructor?.name}`);
+    logger.info(`[XP] client.db.db constructor: ${client.db?.db?.constructor?.name}`);
+    logger.info(`[XP] client.db.db keys: ${Object.keys(client.db?.db || {}).join(', ')}`);
+    logger.info(`[XP] client.db.db.pool: ${!!client.db?.db?.pool}`);
+    logger.info(`[XP] client.db.pool: ${!!client.db?.pool}`);
+
     let rows;
     try {
-        const result = await client.db.pool.query(
+        const result = await client.db.db.pool.query(
             `SELECT guild_id, user_id
              FROM economy
              WHERE (data->>'xpBoosterExpiresAt') IS NOT NULL
