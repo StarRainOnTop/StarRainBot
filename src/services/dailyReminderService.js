@@ -7,39 +7,30 @@ export async function checkDailyReminders(client) {
     const now = Date.now();
     logger.info('[DAILY] checkDailyReminders started');
 
-    let allKeys;
+    let rows;
     try {
-        allKeys = await client.db.list('guild:');
+        const result = await client.db.pool.query(
+            `SELECT guild_id, user_id
+             FROM economy
+             WHERE (data->>'nextReminderAt') IS NOT NULL
+               AND (data->>'nextReminderAt')::bigint <= $1
+               AND COALESCE((data->>'reminderSent')::boolean, false) = false`,
+            [now]
+        );
+        rows = result.rows;
     } catch (err) {
-        logger.error('Failed to list keys for daily reminder check:', err);
+        logger.error('[DAILY] Failed to query daily reminders:', err);
         return;
     }
 
-    logger.info(`[DAILY] client.db.list('guild:') returned ${allKeys?.length ?? 0} keys`);
+    logger.info(`[DAILY] Found ${rows.length} pending reminders`);
 
-    if (!Array.isArray(allKeys)) {
-        logger.warn('[DAILY] allKeys is not an array');
-        return;
-    }
-
-    const economyKeys = allKeys.filter(key => key.includes(':economy:'));
-    logger.info(`[DAILY] economy keys found: ${economyKeys.length}`);
-
-    for (const key of economyKeys) {
-        const parts = key.split(':');
-        if (parts.length < 4 || parts[0] !== 'guild' || parts[2] !== 'economy') continue;
-
-        const guildId = parts[1];
-        const userId = parts[3];
+    for (const row of rows) {
+        const guildId = row.guild_id;
+        const userId = row.user_id;
 
         const userData = await getEconomyData(client, guildId, userId);
         if (!userData) continue;
-
-        logger.info(`[DAILY] user ${userId} nextReminderAt: ${userData.nextReminderAt}, reminderSent: ${userData.reminderSent}`);
-
-        if (!userData.nextReminderAt || now < userData.nextReminderAt || userData.reminderSent) continue;
-
-        logger.info(`[DAILY] Sending DM to ${userId} in guild ${guildId}`);
 
         try {
             const user = await client.users.fetch(userId).catch(() => null);
