@@ -1,7 +1,6 @@
 // src/services/xpBoosterService.js
 import { logger } from '../utils/logger.js';
 import { getEconomyData, setEconomyData } from '../utils/economy.js';
-import { getEconomyKey } from '../utils/database.js';
 
 const XP_BOOSTER_ROLE_ID = '1540410469406220358';
 
