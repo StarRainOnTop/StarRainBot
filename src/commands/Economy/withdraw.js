@@ -7,7 +7,7 @@ import { InteractionHelper } from '../../utils/interactionHelper.js';
 export default {
     data: new SlashCommandBuilder()
         .setName('withdraw')
-        .setDescription('從銀行提取現金到錢包')
+        .setDescription('從銀行🏦提取現金到錢包')
         .addStringOption(option =>
             option
                 .setName('amount')
